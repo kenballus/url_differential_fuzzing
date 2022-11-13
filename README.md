@@ -7,3 +7,9 @@ To install and set up the fuzzing environment, run
 source setup_env.sh
 ```
 (This will not install AFL or python3 for you. You'll need to get those yourself.)
+
+# Running it
+To start fuzzing the default targets with the default configuration, run
+```bash
+python3 diff_fuzz.py
+```
