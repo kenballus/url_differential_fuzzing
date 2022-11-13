@@ -77,6 +77,6 @@ TARGET_CONFIGS: List[TargetConfig] = [
     #    cli_args=[],
     #    needs_qemu=False,
     #    needs_python_afl=False,
-    #    env=dict(os.environ) | {"LD_LIBRARY_PATH": "/home/bkallus/fuzzing/url_fuzzing/targets/wget2/libwget/.libs/"},
+    #    env=dict(os.environ) | {"LD_LIBRARY_PATH": "./targets/wget2/libwget/.libs/"},
     # ),
 ]
