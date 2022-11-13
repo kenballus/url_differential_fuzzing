@@ -1,0 +1,15 @@
+[submodule "python_pkgs/python-afl"]
+	path = python_pkgs/python-afl
+	url = https://github.com/jwilk/python-afl
+[submodule "python_pkgs/rfc3987"]
+	path = python_pkgs/rfc3987
+	url = https://github.com/dgerber/rfc3987/
+[submodule "python_pkgs/rfc3986"]
+	path = python_pkgs/rfc3986
+	url = https://github.com/python-hyper/rfc3986
+[submodule "python_pkgs/urllib3"]
+	path = python_pkgs/urllib3
+	url = https://github.com/urllib3/urllib3
+[submodule "python_pkgs/whatwg-url"]
+	path = python_pkgs/whatwg-url
+	url = https://github.com/sethmlarson/whatwg-url
