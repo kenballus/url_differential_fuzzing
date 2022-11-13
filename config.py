@@ -20,6 +20,7 @@ TIMEOUT_TIME: int = 100000
 # Roughly how many processes to allow in a generation (within a factor of 2)
 ROUGH_DESIRED_QUEUE_LEN: int = 100
 
+
 class TargetConfig(NamedTuple):
     executable: PosixPath  # The path to this target's executable
     cli_args: List[str]  # The CLI arguments this target needs
@@ -37,13 +38,13 @@ TARGET_CONFIGS: List[TargetConfig] = [
         needs_python_afl=True,
         env=dict(os.environ),
     ),
-    TargetConfig(
-        executable=PosixPath("./targets/whatwg_url_target.py"),
-        cli_args=[],
-        needs_qemu=False,
-        needs_python_afl=True,
-        env=dict(os.environ),
-    ),
+    # TargetConfig(
+    #    executable=PosixPath("./targets/whatwg_url_target.py"),
+    #    cli_args=[],
+    #    needs_qemu=False,
+    #    needs_python_afl=True,
+    #    env=dict(os.environ),
+    # ),
     TargetConfig(
         executable=PosixPath("./targets/urllib3_target.py"),
         cli_args=[],
@@ -58,13 +59,13 @@ TARGET_CONFIGS: List[TargetConfig] = [
         needs_python_afl=True,
         env=dict(os.environ),
     ),
-    TargetConfig(
-        executable=PosixPath("./targets/rfc3987_target.py"),
-        cli_args=[],
-        needs_qemu=False,
-        needs_python_afl=True,
-        env=dict(os.environ),
-    ),
+    # TargetConfig(
+    #    executable=PosixPath("./targets/rfc3987_target.py"),
+    #    cli_args=[],
+    #    needs_qemu=False,
+    #    needs_python_afl=True,
+    #    env=dict(os.environ),
+    # ),
     # TargetConfig(
     #    executable=PosixPath("./targets/curl/build/src/curl"),
     #    cli_args=[],

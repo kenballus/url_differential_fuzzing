@@ -162,10 +162,10 @@ def main():
                     differentials.append(current_input)
                 elif fingerprint not in explored:  # We don't mutate differentials, even if they're new
                     explored.add(fingerprint)
-                    print(color(Color.yellow, f"New coverage: {str(current_input.resolve())}"))
+                    # print(color(Color.yellow, f"New coverage: {str(current_input.resolve())}"))
                     mutation_candidates.append(current_input)
                 else:
-                    print(color(Color.grey, f"No new coverage: {str(current_input.resolve())}"))
+                    # print(color(Color.grey, f"No new coverage: {str(current_input.resolve())}"))
                     rejected_candidates.append(current_input)
 
             input_queue = []

@@ -11,5 +11,5 @@ source setup_env.sh
 # Running it
 To start fuzzing the default targets with the default configuration, run
 ```bash
-python3 diff_fuzz.py
+make
 ```
