@@ -1,4 +1,7 @@
 # url\_differential\_fuzzing
+This is basically a wrapper around `afl-showmap` that enables differential fuzzing of URL parsers. Nothing about this work is specific to URL, and I plan to expand it to other protocols in the future.
+
+# Installation
 To install and set up the fuzzing environment, run
 ```bash
 source setup_env.sh

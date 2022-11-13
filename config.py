@@ -5,7 +5,7 @@
 #############################################################################################
 
 from pathlib import PosixPath
-from typing import NamedTuple
+from typing import NamedTuple, List, Dict
 import os
 
 # The directory where the seed inputs are
@@ -18,7 +18,7 @@ TRACE_DIR: PosixPath = PosixPath("./traces")
 TIMEOUT_TIME: int = 100000
 
 # Roughly how many processes to allow in a generation (within a factor of 2)
-ROUGH_DESIRED_QUEUE_LEN: int = 1000
+ROUGH_DESIRED_QUEUE_LEN: int = 100
 
 class TargetConfig(NamedTuple):
     executable: PosixPath  # The path to this target's executable
