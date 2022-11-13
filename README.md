@@ -4,7 +4,7 @@ This is basically a wrapper around `afl-showmap` that enables differential fuzzi
 # Installation
 To install and set up the fuzzing environment, run
 ```bash
-source setup_env.sh
+source set_up_env.sh
 ```
 (This will not install AFL or python3 for you. You'll need to get those yourself.)
 
