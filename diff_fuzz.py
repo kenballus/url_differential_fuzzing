@@ -26,11 +26,11 @@ assert SEED_DIR.is_dir()
 for seed in SEED_INPUTS:
     assert seed.is_file()
 
-# fingerprint_t = Tuple[FrozenSet[int], ...]
+fingerprint_t = Tuple[FrozenSet[int], ...]
 
 
 def byte_flip(s: bytes) -> bytes:
-    # We never make empty files, because that's a known GHDL differential, and it's okay.
+    # We never make empty files because that's boring.
     if len(s) <= 1:
         return byte_insert(s)
 
@@ -83,28 +83,33 @@ def get_trace_filename(executable: PosixPath, input_file: PosixPath) -> PosixPat
     return TRACE_DIR.joinpath(PosixPath(f"{input_file.name}.{executable.name}.trace"))
 
 
-def run_executables(current_input: PosixPath):
+def make_command_line(target_config: TargetConfig, current_input: PosixPath) -> List[str]:
+    command_line: List[str] = []
+    if target_config.needs_python_afl:
+        command_line.append("py-afl-showmap")
+    else:
+        command_line.append("afl-showmap")
+    if target_config.needs_qemu:  # Enable QEMU mode, if necessary
+        command_line.append("-Q")
+    command_line.append("-e")  # Only care about edge coverage; ignore hit counts
+    command_line += [
+        "-o",
+        str(get_trace_filename(target_config.executable, current_input).resolve()),
+    ]
+    command_line += ["-t", str(TIMEOUT_TIME)]
+    command_line.append("--")
+    if target_config.needs_python_afl:
+        command_line.append("python3")
+    command_line.append(str(target_config.executable.resolve()))
+    command_line += target_config.cli_args
 
+    return command_line
+
+
+def run_executables(current_input: PosixPath) -> Tuple[fingerprint_t, Tuple[int, ...]]:
     procs: List[subprocess.Popen] = []
     for target_config in TARGET_CONFIGS:
-        command_line: List[str] = []
-        if target_config.needs_python_afl:
-            command_line.append("py-afl-showmap")
-        else:
-            command_line.append("afl-showmap")
-        if target_config.needs_qemu:  # Enable QEMU mode, if necessary
-            command_line.append("-Q")
-        command_line.append("-e")  # Only care about edge coverage; ignore hit counts
-        command_line += [
-            "-o",
-            str(get_trace_filename(target_config.executable, current_input).resolve()),
-        ]
-        command_line += ["-t", str(TIMEOUT_TIME)]
-        command_line.append("--")
-        if target_config.needs_python_afl:
-            command_line.append("python3")
-        command_line.append(str(target_config.executable.resolve()))
-        command_line += target_config.cli_args
+        command_line: List[str] = make_command_line(target_config, current_input)
         procs.append(
             subprocess.Popen(
                 command_line,
@@ -118,15 +123,15 @@ def run_executables(current_input: PosixPath):
     for proc in procs:
         proc.wait()
 
-    fingerprint = tuple(
+    fingerprint: fingerprint_t = tuple(
         get_trace_edge_set(open(get_trace_filename(c.executable, current_input))) for c in TARGET_CONFIGS
     )
-    return_codes = tuple(proc.returncode for proc in procs)
+    return_codes: Tuple[int, ...] = tuple(proc.returncode for proc in procs)
 
     return fingerprint, return_codes
 
 
-def main():
+def main() -> None:
     if len(sys.argv) > 2:
         print(f"Usage: python3 {sys.argv[0]}", file=sys.stderr)
         sys.exit(1)
@@ -145,7 +150,12 @@ def main():
     differentials: List[PosixPath] = []
     with multiprocessing.Pool(processes=multiprocessing.cpu_count() // len(TARGET_CONFIGS)) as pool:
         while len(input_queue) != 0:  # While there are still inputs to check,
-            print(color(Color.green, f"Starting generation {generation}. {len(input_queue)} inputs to try."))
+            print(
+                color(
+                    Color.green,
+                    f"Starting generation {generation}. {len(input_queue)} inputs to try.",
+                )
+            )
             # run the programs on the things in the input queue.
             fingerprints_and_return_codes = pool.map(run_executables, input_queue)
 
@@ -158,7 +168,12 @@ def main():
                 if len(set(return_codes)) != 1 and fingerprint not in explored:
                     print(color(Color.blue, f"Differential: {str(current_input.resolve())}"))
                     for i, rc in enumerate(return_codes):
-                        print(color(Color.blue, f"    {str(TARGET_CONFIGS[i].executable)} returned {rc}"))
+                        print(
+                            color(
+                                Color.blue,
+                                f"    {str(TARGET_CONFIGS[i].executable)} returned {rc}",
+                            )
+                        )
                     differentials.append(current_input)
                 elif fingerprint not in explored:  # We don't mutate differentials, even if they're new
                     explored.add(fingerprint)
@@ -183,8 +198,8 @@ def main():
                 )
             )
 
-            fingerprints = []
-            proc_lists = []
+            fingerprints: List[fingerprint_t] = []
+            proc_lists: List[subprocess.Popen] = []
             generation += 1
 
     print("Exhausted input list!")

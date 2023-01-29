@@ -13,3 +13,9 @@
 [submodule "python_pkgs/whatwg-url"]
 	path = python_pkgs/whatwg-url
 	url = https://github.com/sethmlarson/whatwg-url
+[submodule "python_pkgs/yarl"]
+	path = python_pkgs/yarl
+	url = https://github.com/aio-libs/yarl
+[submodule "python_pkgs/furl"]
+	path = python_pkgs/furl
+	url = https://github.com/gruns/furl
