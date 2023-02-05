@@ -19,3 +19,6 @@
 [submodule "python_pkgs/furl"]
 	path = python_pkgs/furl
 	url = https://github.com/gruns/furl
+[submodule "python_pkgs/hyperlink"]
+	path = python_pkgs/hyperlink
+	url = https://github.com/python-hyper/hyperlink

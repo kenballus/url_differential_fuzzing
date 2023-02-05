@@ -18,7 +18,11 @@ TRACE_DIR: PosixPath = PosixPath("./traces")
 TIMEOUT_TIME: int = 100000
 
 # Roughly how many processes to allow in a generation (within a factor of 2)
-ROUGH_DESIRED_QUEUE_LEN: int = 1000
+ROUGH_DESIRED_QUEUE_LEN: int = 100
+
+# The location of the installed AFL, if it's not in the PATH.
+# Note that python afl will always use the installation in your PATH.
+AFL_ROOT: PosixPath = PosixPath("/home/bkallus/fuzzing/AFLplusplus/")
 
 
 class TargetConfig(NamedTuple):
@@ -31,48 +35,55 @@ class TargetConfig(NamedTuple):
 
 # Configuration for each fuzzing target
 TARGET_CONFIGS: List[TargetConfig] = [
-    # TargetConfig(
-    #    executable=PosixPath("./targets/cpython_urllib_target.py"),
-    #    cli_args=[],
-    #    needs_qemu=False,
-    #    needs_python_afl=True,
-    #    env=dict(os.environ),
-    # ),
-    # TargetConfig(
-    #    executable=PosixPath("./targets/whatwg_url_target.py"),
-    #    cli_args=[],
-    #    needs_qemu=False,
-    #    needs_python_afl=True,
-    #    env=dict(os.environ),
-    # ),
-    # TargetConfig(
-    #    executable=PosixPath("./targets/urllib3_target.py"),
-    #    cli_args=[],
-    #    needs_qemu=False,
-    #    needs_python_afl=True,
-    #    env=dict(os.environ),
-    # ),
     TargetConfig(
-        executable=PosixPath("./targets/furl_target.py"),
+        executable=PosixPath("./targets/cpython_urllib_target.py"),
         cli_args=[],
         needs_qemu=False,
         needs_python_afl=True,
         env=dict(os.environ),
     ),
-    TargetConfig(
-        executable=PosixPath("./targets/yarl_target.py"),
-        cli_args=[],
-        needs_qemu=False,
-        needs_python_afl=True,
-        env=dict(os.environ),
-    ),
-    # TargetConfig(
-    #    executable=PosixPath("./targets/rfc3986_target.py"),
-    #    cli_args=[],
-    #    needs_qemu=False,
-    #    needs_python_afl=True,
-    #    env=dict(os.environ),
-    # ),
+    #  TargetConfig(
+    #        executable=PosixPath("./targets/whatwg_url_target.py"),
+    #        cli_args=[],
+    #        needs_qemu=False,
+    #        needs_python_afl=True,
+    #        env=dict(os.environ),
+    #    ),
+    #    TargetConfig(
+    #        executable=PosixPath("./targets/urllib3_target.py"),
+    #        cli_args=[],
+    #        needs_qemu=False,
+    #        needs_python_afl=True,
+    #        env=dict(os.environ),
+    #    ),
+    #    TargetConfig(
+    #        executable=PosixPath("./targets/furl_target.py"),
+    #        cli_args=[],
+    #        needs_qemu=False,
+    #        needs_python_afl=True,
+    #        env=dict(os.environ),
+    #    ),
+    #    TargetConfig(
+    #        executable=PosixPath("./targets/yarl_target.py"),
+    #        cli_args=[],
+    #        needs_qemu=False,
+    #        needs_python_afl=True,
+    #        env=dict(os.environ),
+    #    ),
+    #    TargetConfig(
+    #        executable=PosixPath("./targets/rfc3986_target.py"),
+    #        cli_args=[],
+    #        needs_qemu=False,
+    #        needs_python_afl=True,
+    #        env=dict(os.environ),
+    #    ),
+    #    TargetConfig(
+    #        executable=PosixPath("./targets/hyperlink_target.py"),
+    #        cli_args=[],
+    #        needs_qemu=False,
+    #        needs_python_afl=True,
+    #        env=dict(os.environ),
+    #    ),
     # TargetConfig(
     #    executable=PosixPath("./targets/rfc3987_target.py"),
     #    cli_args=[],
@@ -94,4 +105,11 @@ TARGET_CONFIGS: List[TargetConfig] = [
     #    needs_python_afl=False,
     #    env=dict(os.environ) | {"LD_LIBRARY_PATH": "./targets/wget2/libwget/.libs/"},
     # ),
+    TargetConfig(
+        executable=PosixPath("./targets/boost_url/boost_url_target"),
+        cli_args=[],
+        needs_qemu=False,
+        needs_python_afl=False,
+        env=dict(os.environ),
+    ),
 ]

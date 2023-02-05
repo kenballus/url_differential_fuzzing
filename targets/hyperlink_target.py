@@ -1,21 +1,19 @@
 import sys
-import urllib.parse
+import hyperlink
 import afl
 afl.init()
 
 def main():
     url_string = sys.stdin.read()
-    parsed_url = urllib.parse.urlparse(url_string)
+    parsed_url = hyperlink.URL.from_text(url_string)
 
     scheme = parsed_url.scheme
-    host = parsed_url.hostname
-    path = parsed_url.path
+    host = parsed_url.host
+    path = "".join(parsed_url.path)
     port = parsed_url.port
-    query = parsed_url.query
-    username = parsed_url.username
+    query = "&".join(p[0] + "=" + p[1] for p in parsed_url.query)
+    username = parsed_url.user
     fragment = parsed_url.fragment
-    if parsed_url.params:
-        path += ';' + parsed_url.params
 
     print(f"Scheme:   {scheme if scheme else '(nil)'}")
     print(f"Host:     {host if host else '(nil)'}")

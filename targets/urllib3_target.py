@@ -15,13 +15,13 @@ def main():
     username = parsed_url.auth
     fragment = parsed_url.fragment
 
-    print(f"Scheme:   {scheme if scheme else '(nil)'}");
-    print(f"Host:     {host if host else '(nil)'}");
-    print(f"Path:     {path if path else '(nil)'}");
-    print(f"Port:     {port if port else '(nil)'}");
-    print(f"Query:    {query if query else '(nil)'}");
-    print(f"Username: {username if username else '(nil)'}");
-    print(f"Fragment: {fragment if fragment else '(nil)'}");
+    print(f"Scheme:   {scheme if scheme else '(nil)'}")
+    print(f"Host:     {host if host else '(nil)'}")
+    print(f"Path:     {path if path else '(nil)'}")
+    print(f"Port:     {port if port else '(nil)'}")
+    print(f"Query:    {query if query else '(nil)'}")
+    print(f"Username: {username if username else '(nil)'}")
+    print(f"Fragment: {fragment if fragment else '(nil)'}")
 
 if __name__ == "__main__":
     main()

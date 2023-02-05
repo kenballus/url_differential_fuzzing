@@ -88,7 +88,7 @@ def make_command_line(target_config: TargetConfig, current_input: PosixPath) -> 
     if target_config.needs_python_afl:
         command_line.append("py-afl-showmap")
     else:
-        command_line.append("afl-showmap")
+        command_line.append(str(AFL_ROOT.resolve()) + "/afl-showmap")
     if target_config.needs_qemu:  # Enable QEMU mode, if necessary
         command_line.append("-Q")
     command_line.append("-e")  # Only care about edge coverage; ignore hit counts
@@ -106,7 +106,7 @@ def make_command_line(target_config: TargetConfig, current_input: PosixPath) -> 
     return command_line
 
 
-def run_executables(current_input: PosixPath) -> Tuple[fingerprint_t, Tuple[int, ...]]:
+def run_executables(current_input: PosixPath) -> Tuple[fingerprint_t, Tuple[int, ...], Tuple[str, ...]]:
     procs: List[subprocess.Popen] = []
     for target_config in TARGET_CONFIGS:
         command_line: List[str] = make_command_line(target_config, current_input)
@@ -114,7 +114,7 @@ def run_executables(current_input: PosixPath) -> Tuple[fingerprint_t, Tuple[int,
             subprocess.Popen(
                 command_line,
                 stdin=open(current_input),
-                stdout=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 env=target_config.env,
             )
@@ -127,8 +127,8 @@ def run_executables(current_input: PosixPath) -> Tuple[fingerprint_t, Tuple[int,
         get_trace_edge_set(open(get_trace_filename(c.executable, current_input))) for c in TARGET_CONFIGS
     )
     return_codes: Tuple[int, ...] = tuple(proc.returncode for proc in procs)
-
-    return fingerprint, return_codes
+    stdouts: Tuple[str, ...] = tuple(proc.stdout.read() if proc.stdout is not None else "" for proc in procs)
+    return fingerprint, return_codes, stdouts
 
 
 def main() -> None:
@@ -148,6 +148,7 @@ def main() -> None:
 
     generation: int = 0
     differentials: List[PosixPath] = []
+    fine_grained_differentials: List[PosixPath] = []
     with multiprocessing.Pool(processes=multiprocessing.cpu_count() // len(TARGET_CONFIGS)) as pool:
         while len(input_queue) != 0:  # While there are still inputs to check,
             print(
@@ -157,12 +158,14 @@ def main() -> None:
                 )
             )
             # run the programs on the things in the input queue.
-            fingerprints_and_return_codes = pool.map(run_executables, input_queue)
+            fingerprints_and_return_codes_and_stdouts = pool.map(run_executables, input_queue)
 
             mutation_candidates: List[PosixPath] = []
             rejected_candidates: List[PosixPath] = []
 
-            for current_input, (fingerprint, return_codes) in zip(input_queue, fingerprints_and_return_codes):
+            for current_input, (fingerprint, return_codes, stdouts) in zip(
+                input_queue, fingerprints_and_return_codes_and_stdouts
+            ):
                 # If we found something new, mutate it and add its children to the input queue
                 # If we get one program to fail while another succeeds, then we're doing good.
                 if len(set(return_codes)) != 1 and fingerprint not in explored:
@@ -175,6 +178,16 @@ def main() -> None:
                             )
                         )
                     differentials.append(current_input)
+                elif len(set(stdouts)) != 1 and fingerprint not in explored:
+                    print(color(Color.blue, f"Fine-grained differential: {str(current_input.resolve())}"))
+                    for i, s in enumerate(stdouts):
+                        print(
+                            color(
+                                Color.blue,
+                                f"    {str(TARGET_CONFIGS[i].executable)} printed {s}",
+                            )
+                        )
+                    fine_grained_differentials.append(current_input)
                 elif fingerprint not in explored:  # We don't mutate differentials, even if they're new
                     explored.add(fingerprint)
                     # print(color(Color.yellow, f"New coverage: {str(current_input.resolve())}"))
@@ -194,7 +207,7 @@ def main() -> None:
             print(
                 color(
                     Color.green,
-                    f"End of generation {generation}. {len(differentials)} total differentials and {len(mutation_candidates)} mutation candidates found.",
+                    f"End of generation {generation}. {len(differentials)} differentials, {len(fine_grained_differentials)} fine-grained differentials, and {len(mutation_candidates)} mutation candidates found.",
                 )
             )
 
@@ -203,9 +216,11 @@ def main() -> None:
             generation += 1
 
     print("Exhausted input list!")
-    if differentials != []:
+    if differentials != [] or fine_grained_differentials != []:
         print(f"Differentials:")
         print("\n".join(str(f.resolve()) for f in differentials))
+        print(f"Fine-grained differentials:")
+        print("\n".join(str(f.resolve()) for f in fine_grained_differentials))
     else:
         print("No differentials found! Try increasing ROUGH_DESIRED_QUEUE_LEN.")
 
