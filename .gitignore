@@ -1,3 +1,4 @@
 inputs
 traces
 **/__pycache__
+url_fuzz_env/*

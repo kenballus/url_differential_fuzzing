@@ -88,12 +88,12 @@ IPV6ADDRESS_PAT: str = "(" + r"|".join((
 )) + ")"
 
 # IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
-# IPVFUTURE_PAT: str = rf"v[0-9A-F]+\.({UNRESERVED_PAT}|{SUB_DELIMS_PAT}|:)+"
+IPVFUTURE_PAT: str = rf"v[0-9A-F]+\.({UNRESERVED_PAT}|{SUB_DELIMS_PAT}|:)+"
 
 # IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
-# IP_LITERAL_PAT: str = rf"(\[(?:{IPV6ADDRESS_PAT}|{IPVFUTURE_PAT})\])"
+IP_LITERAL_PAT: str = rf"(\[(?:{IPV6ADDRESS_PAT}|{IPVFUTURE_PAT})\])"
 # ipvfuture is often unimplemented, so omit it:
-IP_LITERAL_PAT: str = rf"(\[{IPV6ADDRESS_PAT}\])"
+# IP_LITERAL_PAT: str = rf"(\[{IPV6ADDRESS_PAT}\])"
 
 # reg-name = *( unreserved / pct-encoded / sub-delims )
 REG_NAME_PAT: str = rf"((?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT})*)"
