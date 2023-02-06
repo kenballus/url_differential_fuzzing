@@ -17,7 +17,9 @@ from typing import List, Dict, Set, FrozenSet, Tuple
 
 from config import *
 
-SEED_INPUTS: List[PosixPath] = list(map(SEED_DIR.joinpath, map(PosixPath, os.listdir(SEED_DIR))))
+SEED_INPUTS: List[PosixPath] = list(
+    map(SEED_DIR.joinpath, map(PosixPath, os.listdir(SEED_DIR)))
+)
 
 for tc in TARGET_CONFIGS:
     assert tc.executable.is_file()
@@ -57,7 +59,9 @@ def mutate_input(input_filename: PosixPath) -> PosixPath:
     mutant_filename: PosixPath = PosixPath(f"inputs/{random.randint(0, 2**32-1)}.input")
     with open(mutant_filename, "wb") as f:
         f.write(
-            random.choice((byte_flip, byte_insert, probably_byte_delete))(open(input_filename, "rb").read())
+            random.choice((byte_flip, byte_insert, probably_byte_delete))(
+                open(input_filename, "rb").read()
+            )
         )
 
     return mutant_filename
@@ -83,7 +87,9 @@ def get_trace_filename(executable: PosixPath, input_file: PosixPath) -> PosixPat
     return TRACE_DIR.joinpath(PosixPath(f"{input_file.name}.{executable.name}.trace"))
 
 
-def make_command_line(target_config: TargetConfig, current_input: PosixPath) -> List[str]:
+def make_command_line(
+    target_config: TargetConfig, current_input: PosixPath
+) -> List[str]:
     command_line: List[str] = []
     if target_config.needs_python_afl:
         command_line.append("py-afl-showmap")
@@ -106,7 +112,27 @@ def make_command_line(target_config: TargetConfig, current_input: PosixPath) -> 
     return command_line
 
 
-def run_executables(current_input: PosixPath) -> Tuple[fingerprint_t, Tuple[int, ...], Tuple[str, ...]]:
+# afl-showmap sticks this stupid junk on stdout, so we have to cut it out of our targets' output.
+# python-afl does not do this, so we don't have to do this for python targets
+SHOWMAP_STDOUT_FOOTER: bytes = b"\x1b[0;36mafl-showmap"
+
+
+def normalize_showmap_output(
+    proc: subprocess.Popen, target_config: TargetConfig
+) -> bytes:
+    if proc.stdout is None:
+        return b""
+    elif target_config.needs_python_afl:
+        # python-afl doesn't clutter stdout, so leave it alone
+        return proc.stdout.read()
+    else:
+        stdout_bytes: bytes = proc.stdout.read()
+        return stdout_bytes[: stdout_bytes.index(SHOWMAP_STDOUT_FOOTER)]
+
+
+def run_executables(
+    current_input: PosixPath,
+) -> Tuple[fingerprint_t, Tuple[int, ...], Tuple[bytes, ...]]:
     procs: List[subprocess.Popen] = []
     for target_config in TARGET_CONFIGS:
         command_line: List[str] = make_command_line(target_config, current_input)
@@ -123,12 +149,16 @@ def run_executables(current_input: PosixPath) -> Tuple[fingerprint_t, Tuple[int,
     for proc in procs:
         proc.wait()
 
+    stdouts: List[bytes] = []
+    for proc, target_config in zip(procs, TARGET_CONFIGS):
+        stdouts.append(normalize_showmap_output(proc, target_config))
+
     fingerprint: fingerprint_t = tuple(
-        get_trace_edge_set(open(get_trace_filename(c.executable, current_input))) for c in TARGET_CONFIGS
+        get_trace_edge_set(open(get_trace_filename(c.executable, current_input)))
+        for c in TARGET_CONFIGS
     )
     return_codes: Tuple[int, ...] = tuple(proc.returncode for proc in procs)
-    stdouts: Tuple[str, ...] = tuple(proc.stdout.read() if proc.stdout is not None else "" for proc in procs)
-    return fingerprint, return_codes, stdouts
+    return fingerprint, return_codes, tuple(stdouts)
 
 
 def main() -> None:
@@ -149,7 +179,9 @@ def main() -> None:
     generation: int = 0
     differentials: List[PosixPath] = []
     fine_grained_differentials: List[PosixPath] = []
-    with multiprocessing.Pool(processes=multiprocessing.cpu_count() // len(TARGET_CONFIGS)) as pool:
+    with multiprocessing.Pool(
+        processes=multiprocessing.cpu_count() // len(TARGET_CONFIGS)
+    ) as pool:
         while len(input_queue) != 0:  # While there are still inputs to check,
             print(
                 color(
@@ -158,7 +190,9 @@ def main() -> None:
                 )
             )
             # run the programs on the things in the input queue.
-            fingerprints_and_return_codes_and_stdouts = pool.map(run_executables, input_queue)
+            fingerprints_and_return_codes_and_stdouts = pool.map(
+                run_executables, input_queue
+            )
 
             mutation_candidates: List[PosixPath] = []
             rejected_candidates: List[PosixPath] = []
@@ -169,7 +203,11 @@ def main() -> None:
                 # If we found something new, mutate it and add its children to the input queue
                 # If we get one program to fail while another succeeds, then we're doing good.
                 if len(set(return_codes)) != 1 and fingerprint not in explored:
-                    print(color(Color.blue, f"Differential: {str(current_input.resolve())}"))
+                    print(
+                        color(
+                            Color.blue, f"Differential: {str(current_input.resolve())}"
+                        )
+                    )
                     for i, rc in enumerate(return_codes):
                         print(
                             color(
@@ -179,16 +217,23 @@ def main() -> None:
                         )
                     differentials.append(current_input)
                 elif len(set(stdouts)) != 1 and fingerprint not in explored:
-                    print(color(Color.blue, f"Fine-grained differential: {str(current_input.resolve())}"))
+                    print(
+                        color(
+                            Color.blue,
+                            f"Fine-grained differential: {str(current_input.resolve())}",
+                        )
+                    )
                     for i, s in enumerate(stdouts):
                         print(
                             color(
                                 Color.blue,
-                                f"    {str(TARGET_CONFIGS[i].executable)} printed {s}",
+                                f"    {str(TARGET_CONFIGS[i].executable)} printed\t{s!r}",
                             )
                         )
                     fine_grained_differentials.append(current_input)
-                elif fingerprint not in explored:  # We don't mutate differentials, even if they're new
+                elif (
+                    fingerprint not in explored
+                ):  # We don't mutate differentials, even if they're new
                     explored.add(fingerprint)
                     # print(color(Color.yellow, f"New coverage: {str(current_input.resolve())}"))
                     mutation_candidates.append(current_input)
@@ -197,7 +242,9 @@ def main() -> None:
                     rejected_candidates.append(current_input)
 
             input_queue = []
-            while mutation_candidates != [] and len(input_queue) < ROUGH_DESIRED_QUEUE_LEN:
+            while (
+                mutation_candidates != [] and len(input_queue) < ROUGH_DESIRED_QUEUE_LEN
+            ):
                 for input_to_mutate in mutation_candidates:
                     input_queue.append(mutate_input(input_to_mutate))
 
