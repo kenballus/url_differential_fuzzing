@@ -21,7 +21,7 @@ TIMEOUT_TIME: int = 100000
 ROUGH_DESIRED_QUEUE_LEN: int = 100
 
 # The location of the installed AFL, if it's not in the PATH.
-# Note that python afl will always use the installation in your PATH.
+# Note that python-afl will always use the installation in your PATH.
 AFL_ROOT: PosixPath = PosixPath("/home/bkallus/fuzzing/AFLplusplus/")
 
 
