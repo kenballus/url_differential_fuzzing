@@ -9,7 +9,9 @@ def main():
 
     scheme = parsed_url.scheme
     host = parsed_url.host
-    path = "".join(parsed_url.path)
+    path = "/".join(parsed_url.path)
+    if parsed_url.rooted:
+        path = "/" + path
     port = parsed_url.port
     query = "&".join(p[0] + "=" + p[1] for p in parsed_url.query)
     username = parsed_url.user
@@ -18,7 +20,7 @@ def main():
     print(f"Scheme:   {scheme if scheme else '(nil)'}")
     print(f"Host:     {host if host else '(nil)'}")
     print(f"Path:     {path if path else '(nil)'}")
-    print(f"Port:     {port if port else '(nil)'}")
+    print(f"Port:     {port if port not in (b'', '', None) else '(nil)'}")
     print(f"Query:    {query if query else '(nil)'}")
     print(f"Username: {username if username else '(nil)'}")
     print(f"Fragment: {fragment if fragment else '(nil)'}")

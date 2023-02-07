@@ -9,13 +9,16 @@ import sys
 import subprocess
 import multiprocessing
 import random
+import functools
 import io
 import os
+import re
 from pathlib import PosixPath
 from enum import Enum
-from typing import List, Dict, Set, FrozenSet, Tuple
+from typing import List, Dict, Set, FrozenSet, Tuple, Callable, Optional
 
 from config import *
+from grammar import generate_random_matching_input, grammar_re, grammar_dict
 
 SEED_INPUTS: List[PosixPath] = list(
     map(SEED_DIR.joinpath, map(PosixPath, os.listdir(SEED_DIR)))
@@ -28,41 +31,63 @@ assert SEED_DIR.is_dir()
 for seed in SEED_INPUTS:
     assert seed.is_file()
 
-fingerprint_t = Tuple[FrozenSet[int], ...]
+# fingerprint_t = Tuple[FrozenSet[int], ...]
+fingerprint_t = int
 
 
-def byte_flip(s: bytes) -> bytes:
-    # We never make empty files because that's boring.
-    if len(s) <= 1:
-        return byte_insert(s)
+def grammar_mutate(m: re.Match, _: bytes) -> bytes:
+    # This function takes _ so it can have the same
+    # signature as the other mutators after currying with m,
+    # even though _ is ignored.
+    rule_name, orig_rule_match = random.choice(
+        list(filter(lambda p: bool(p[1]), m.groupdict().items()))
+    )
+    new_rule_match: str = generate_random_matching_input(grammar_dict[rule_name])
 
-    index: int = random.randint(0, len(s) - 1)
-    return s[:index] + bytes([random.randint(0, 255)]) + s[index + 1 :]
+    # This has a chance of being wrong, but that's okay in my opinion
+    slice_index: int = m.string.index(orig_rule_match)
+
+    return bytes(
+        m.string[:slice_index]
+        + new_rule_match
+        + m.string[slice_index + len(orig_rule_match) :],
+        "UTF-8",
+    )
 
 
-def byte_insert(s: bytes) -> bytes:
-    index: int = random.randint(0, len(s))
-    return s[:index] + bytes([random.randint(0, 255)]) + s[index:]
+def byte_change(b: bytes) -> bytes:
+    index: int = random.randint(0, len(b) - 1)
+    return b[:index] + bytes([random.randint(0, 255)]) + b[index + 1 :]
 
 
-def probably_byte_delete(s: bytes) -> bytes:
-    # Never make an empty file.
-    # Empty files often cause differentials, and that's okay.
-    if len(s) <= 1:
-        return byte_insert(s)
+def byte_insert(b: bytes) -> bytes:
+    index: int = random.randint(0, len(b))
+    return b[:index] + bytes([random.randint(0, 255)]) + b[index:]
 
-    index: int = random.randint(0, len(s) - 1)
-    return s[:index] + s[index + 1 :]
+
+def byte_delete(b: bytes) -> bytes:
+    index: int = random.randint(0, len(b) - 1)
+    return b[:index] + b[index + 1 :]
 
 
 def mutate_input(input_filename: PosixPath) -> PosixPath:
     mutant_filename: PosixPath = PosixPath(f"inputs/{random.randint(0, 2**32-1)}.input")
-    with open(mutant_filename, "wb") as f:
-        f.write(
-            random.choice((byte_flip, byte_insert, probably_byte_delete))(
-                open(input_filename, "rb").read()
-            )
-        )
+    with open(mutant_filename, "wb") as ofile, open(input_filename, "rb") as ifile:
+        b: bytes = ifile.read()
+
+        mutators: List[Callable[[bytes], bytes]] = [byte_insert]
+        if len(b) > 0:
+            mutators.append(byte_change)
+        if len(b) > 1:
+            mutators.append(byte_delete)
+        try:
+            m: Optional[re.Match] = re.match(grammar_re, str(b, "UTF-8"))
+            if m is not None:
+                mutators.append(functools.partial(grammar_mutate, m))
+        except UnicodeDecodeError:
+            pass
+
+        ofile.write(random.choice(mutators)(b))
 
     return mutant_filename
 
@@ -112,11 +137,6 @@ def make_command_line(
     return command_line
 
 
-# afl-showmap sticks this stupid junk on stdout, so we have to cut it out of our targets' output.
-# python-afl does not do this, so we don't have to do this for python targets
-SHOWMAP_STDOUT_FOOTER: bytes = b"\x1b[0;36mafl-showmap"
-
-
 def normalize_showmap_output(
     proc: subprocess.Popen, target_config: TargetConfig
 ) -> bytes:
@@ -126,6 +146,9 @@ def normalize_showmap_output(
         # python-afl doesn't clutter stdout, so leave it alone
         return proc.stdout.read()
     else:
+        # afl-showmap (not the python version, though) sticks this stupid junk
+        # on stdout, so we have to cut it out of our targets' outputs.
+        SHOWMAP_STDOUT_FOOTER: bytes = b"\x1b[0;36mafl-showmap"
         stdout_bytes: bytes = proc.stdout.read()
         return stdout_bytes[: stdout_bytes.index(SHOWMAP_STDOUT_FOOTER)]
 
@@ -153,12 +176,14 @@ def run_executables(
     for proc, target_config in zip(procs, TARGET_CONFIGS):
         stdouts.append(normalize_showmap_output(proc, target_config))
 
-    fingerprint: fingerprint_t = tuple(
-        get_trace_edge_set(open(get_trace_filename(c.executable, current_input)))
-        for c in TARGET_CONFIGS
+    fingerprint: fingerprint_t = hash(
+        tuple(
+            get_trace_edge_set(open(get_trace_filename(c.executable, current_input)))
+            for c in TARGET_CONFIGS
+        )
     )
-    return_codes: Tuple[int, ...] = tuple(proc.returncode for proc in procs)
-    return fingerprint, return_codes, tuple(stdouts)
+    statuses: Tuple[int, ...] = tuple(proc.returncode != 0 for proc in procs)
+    return fingerprint, statuses, tuple(stdouts)
 
 
 def main() -> None:
@@ -179,97 +204,103 @@ def main() -> None:
     generation: int = 0
     differentials: List[PosixPath] = []
     fine_grained_differentials: List[PosixPath] = []
-    with multiprocessing.Pool(
-        processes=multiprocessing.cpu_count() // len(TARGET_CONFIGS)
-    ) as pool:
-        while len(input_queue) != 0:  # While there are still inputs to check,
-            print(
-                color(
-                    Color.green,
-                    f"Starting generation {generation}. {len(input_queue)} inputs to try.",
-                )
-            )
-            # run the programs on the things in the input queue.
-            fingerprints_and_return_codes_and_stdouts = pool.map(
-                run_executables, input_queue
-            )
-
-            mutation_candidates: List[PosixPath] = []
-            rejected_candidates: List[PosixPath] = []
-
-            for current_input, (fingerprint, return_codes, stdouts) in zip(
-                input_queue, fingerprints_and_return_codes_and_stdouts
-            ):
-                # If we found something new, mutate it and add its children to the input queue
-                # If we get one program to fail while another succeeds, then we're doing good.
-                if len(set(return_codes)) != 1 and fingerprint not in explored:
-                    print(
-                        color(
-                            Color.blue, f"Differential: {str(current_input.resolve())}"
-                        )
+    try:
+        with multiprocessing.Pool(
+            processes=multiprocessing.cpu_count() // len(TARGET_CONFIGS)
+        ) as pool:
+            while len(input_queue) != 0:  # While there are still inputs to check,
+                print(
+                    color(
+                        Color.green,
+                        f"Starting generation {generation}. {len(input_queue)} inputs to try.",
                     )
-                    for i, rc in enumerate(return_codes):
-                        print(
-                            color(
-                                Color.blue,
-                                f"    {str(TARGET_CONFIGS[i].executable)} returned {rc}",
-                            )
-                        )
-                    differentials.append(current_input)
-                elif len(set(stdouts)) != 1 and fingerprint not in explored:
-                    print(
-                        color(
-                            Color.blue,
-                            f"Fine-grained differential: {str(current_input.resolve())}",
-                        )
-                    )
-                    for i, s in enumerate(stdouts):
-                        print(
-                            color(
-                                Color.blue,
-                                f"    {str(TARGET_CONFIGS[i].executable)} printed\t{s!r}",
-                            )
-                        )
-                    fine_grained_differentials.append(current_input)
-                elif (
-                    fingerprint not in explored
-                ):  # We don't mutate differentials, even if they're new
-                    explored.add(fingerprint)
-                    # print(color(Color.yellow, f"New coverage: {str(current_input.resolve())}"))
-                    mutation_candidates.append(current_input)
-                else:
-                    # print(color(Color.grey, f"No new coverage: {str(current_input.resolve())}"))
-                    rejected_candidates.append(current_input)
-
-            input_queue = []
-            while (
-                mutation_candidates != [] and len(input_queue) < ROUGH_DESIRED_QUEUE_LEN
-            ):
-                for input_to_mutate in mutation_candidates:
-                    input_queue.append(mutate_input(input_to_mutate))
-
-            for reject in rejected_candidates:
-                os.remove(reject)
-
-            print(
-                color(
-                    Color.green,
-                    f"End of generation {generation}. {len(differentials)} differentials, {len(fine_grained_differentials)} fine-grained differentials, and {len(mutation_candidates)} mutation candidates found.",
                 )
-            )
+                # run the programs on the things in the input queue.
+                fingerprints_and_statuses_and_stdouts = pool.map(
+                    run_executables, input_queue
+                )
 
-            fingerprints: List[fingerprint_t] = []
-            proc_lists: List[subprocess.Popen] = []
-            generation += 1
+                mutation_candidates: List[PosixPath] = []
+                rejected_candidates: List[PosixPath] = []
 
-    print("Exhausted input list!")
-    if differentials != [] or fine_grained_differentials != []:
-        print(f"Differentials:")
-        print("\n".join(str(f.resolve()) for f in differentials))
-        print(f"Fine-grained differentials:")
-        print("\n".join(str(f.resolve()) for f in fine_grained_differentials))
-    else:
+                for current_input, (fingerprint, statuses, stdouts) in zip(
+                    input_queue, fingerprints_and_statuses_and_stdouts
+                ):
+                    # If we found something new, mutate it and add its children to the input queue
+                    # If we get one program to fail while another succeeds, then we're doing good.
+                    if fingerprint not in explored:
+                        explored.add(fingerprint)
+                        if len(set(statuses)) != 1:
+                            print(
+                                color(
+                                    Color.blue,
+                                    f"Differential: {str(current_input.resolve())}",
+                                )
+                            )
+                            for i, status in enumerate(statuses):
+                                print(
+                                    color(
+                                        Color.red if status else Color.blue,
+                                        f"    {'failed' if status else 'succeeded'}:\t{str(TARGET_CONFIGS[i].executable)}",
+                                    )
+                                )
+                            differentials.append(current_input)
+                        elif len(set(stdouts)) != 1:
+                            print(
+                                color(
+                                    Color.yellow,
+                                    f"Fine-grained differential: {str(current_input.resolve())}",
+                                )
+                            )
+                            for i, s in enumerate(stdouts):
+                                print(
+                                    color(
+                                        Color.yellow,
+                                        f"    {str(TARGET_CONFIGS[i].executable)} printed\t{s!r}",
+                                    )
+                                )
+                            fine_grained_differentials.append(current_input)
+                        else:
+                            # We don't mutate differentials, even if they're new
+                            # print(color(Color.yellow, f"New coverage: {str(current_input.resolve())}"))
+                            mutation_candidates.append(current_input)
+                    else:
+                        # print(color(Color.grey, f"No new coverage: {str(current_input.resolve())}"))
+                        rejected_candidates.append(current_input)
+
+                input_queue = []
+                while (
+                    mutation_candidates != []
+                    and len(input_queue) < ROUGH_DESIRED_QUEUE_LEN
+                ):
+                    for input_to_mutate in mutation_candidates:
+                        input_queue.append(mutate_input(input_to_mutate))
+
+                for reject in rejected_candidates:
+                    os.remove(reject)
+
+                print(
+                    color(
+                        Color.green,
+                        f"End of generation {generation}.\nDifferentials:\t\t\t{len(differentials)}\nFine-grained differentials:\t{len(fine_grained_differentials)}\nMutation candidates:\t\t{len(mutation_candidates)}",
+                    )
+                )
+
+                fingerprints: List[fingerprint_t] = []
+                proc_lists: List[subprocess.Popen] = []
+                generation += 1
+    except KeyboardInterrupt:
+        pass
+
+    if differentials == fine_grained_differentials == []:
         print("No differentials found! Try increasing ROUGH_DESIRED_QUEUE_LEN.")
+    else:
+        if differentials != []:
+            print(f"Differentials:")
+            print("\n".join(str(f.resolve()) for f in differentials))
+        if fine_grained_differentials != []:
+            print(f"Fine-grained differentials:")
+            print("\n".join(str(f.resolve()) for f in fine_grained_differentials))
 
 
 # For pretty printing

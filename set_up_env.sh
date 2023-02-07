@@ -31,9 +31,16 @@ rm -rf url_fuzz_env || fail "Couldn't remove old venv."
 $PYTHON_EXE -m venv url_fuzz_env || fail "Couldn't make a venv."
 source ./url_fuzz_env/bin/activate || fail "Couldn't activate the venv."
 pip3 install --upgrade pip || { deactivate; fail "Couldn't update pip."; }
+
+# These are the packages that we made submodules.
 for PKG in $PYTHON_PKG_DIR/*; do
     YARL_NO_EXTENSIONS=1 pip3 install "$PKG" || { deactivate; fail "Couldn't install $PKG."; }
     # kind of a hack for yarl, but whatever
+done
+
+# These are the packages that we can just get from pypi
+for PKG in hypothesis; do
+    pip3 install "$PKG" || { deactivate; fail "Couldn't install $PKG."; }
 done
 
 echo -e "\033[32mYou are now in the fuzzing venv. run \`deactivate\` to exit the venv.\033[0m"
