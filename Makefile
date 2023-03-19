@@ -3,8 +3,8 @@ all: clean format typecheck
 	python3 diff_fuzz.py
 
 format:
-	black diff_fuzz.py
-	black config.py
+	black -l 110 diff_fuzz.py
+	black -l 110 config.py
 
 typecheck:
 	mypy diff_fuzz.py
