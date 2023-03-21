@@ -39,7 +39,9 @@ SEGMENT_PAT: str = rf"(?:{PCHAR_PAT}*)"
 SEGMENT_NZ_PAT: str = rf"(?:{PCHAR_PAT}+)"
 
 # path-absolute = "/" [ segment-nz *( "/" segment ) ]
-PATH_ABSOLUTE_PAT: str = rf"(?P<path_absolute>/(?:{SEGMENT_NZ_PAT}(?:/{SEGMENT_PAT})*)?)"
+PATH_ABSOLUTE_PAT: str = (
+    rf"(?P<path_absolute>/(?:{SEGMENT_NZ_PAT}(?:/{SEGMENT_PAT})*)?)"
+)
 PATH_ABSOLUTE_RE: re.Pattern = re.compile(PATH_ABSOLUTE_PAT)
 
 # path-empty = 0<pchar>
@@ -55,7 +57,9 @@ PATH_ABEMPTY_PAT: str = rf"(?P<path_abempty>(?:/{SEGMENT_PAT})*)"
 PATH_ABEMPTY_RE: re.Pattern = re.compile(PATH_ABEMPTY_PAT)
 
 # userinfo = *( unreserved / pct-encoded / sub-delims / ":" )
-USERINFO_PAT: str = rf"(?P<userinfo>(?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT}|:)*)"
+USERINFO_PAT: str = (
+    rf"(?P<userinfo>(?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT}|:)*)"
+)
 USERINFO_RE: re.Pattern = re.compile(USERINFO_PAT)
 
 # dec-octet = DIGIT                 ; 0-9
@@ -66,7 +70,9 @@ USERINFO_RE: re.Pattern = re.compile(USERINFO_PAT)
 DEC_OCTET_PAT: str = rf"(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])"
 
 # IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
-IPV4ADDRESS_PAT: str = rf"({DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT})"
+IPV4ADDRESS_PAT: str = (
+    rf"({DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT})"
+)
 IPV4ADDRESS_RE: re.Pattern = re.compile(IPV4ADDRESS_PAT)
 
 # h16 = 1*4HEXDIG
@@ -84,17 +90,23 @@ LS32_PAT: str = rf"(?:{H16_PAT}:{H16_PAT}|{IPV4ADDRESS_PAT})"
 #             / [ *4( h16 ":" ) h16 ] "::"              ls32
 #             / [ *5( h16 ":" ) h16 ] "::"              h16
 #             / [ *6( h16 ":" ) h16 ] "::"
-IPV6ADDRESS_PAT: str = r"(" + r"|".join((
-                                         rf"(?:{H16_PAT}:){{6}}{LS32_PAT}",
-                                       rf"::(?:{H16_PAT}:){{5}}{LS32_PAT}",
-                         rf"(?:{H16_PAT})?::(?:{H16_PAT}:){{4}}{LS32_PAT}",
-    rf"(?:(?:{H16_PAT}:){{0,1}}{H16_PAT})?::(?:{H16_PAT}:){{3}}{LS32_PAT}",
-    rf"(?:(?:{H16_PAT}:){{0,2}}{H16_PAT})?::(?:{H16_PAT}:){{2}}{LS32_PAT}",
-    rf"(?:(?:{H16_PAT}:){{0,3}}{H16_PAT})?::(?:{H16_PAT}:){{1}}{LS32_PAT}",
-    rf"(?:(?:{H16_PAT}:){{0,4}}{H16_PAT})?::{LS32_PAT}",
-    rf"(?:(?:{H16_PAT}:){{0,5}}{H16_PAT})?::{H16_PAT}",
-    rf"(?:(?:{H16_PAT}:){{0,6}}{H16_PAT})?::",
-)) + ")"
+IPV6ADDRESS_PAT: str = (
+    r"("
+    + r"|".join(
+        (
+            rf"(?:{H16_PAT}:){{6}}{LS32_PAT}",
+            rf"::(?:{H16_PAT}:){{5}}{LS32_PAT}",
+            rf"(?:{H16_PAT})?::(?:{H16_PAT}:){{4}}{LS32_PAT}",
+            rf"(?:(?:{H16_PAT}:){{0,1}}{H16_PAT})?::(?:{H16_PAT}:){{3}}{LS32_PAT}",
+            rf"(?:(?:{H16_PAT}:){{0,2}}{H16_PAT})?::(?:{H16_PAT}:){{2}}{LS32_PAT}",
+            rf"(?:(?:{H16_PAT}:){{0,3}}{H16_PAT})?::(?:{H16_PAT}:){{1}}{LS32_PAT}",
+            rf"(?:(?:{H16_PAT}:){{0,4}}{H16_PAT})?::{LS32_PAT}",
+            rf"(?:(?:{H16_PAT}:){{0,5}}{H16_PAT})?::{H16_PAT}",
+            rf"(?:(?:{H16_PAT}:){{0,6}}{H16_PAT})?::",
+        )
+    )
+    + ")"
+)
 IPV6ADDRESS_RE: re.Pattern = re.compile(IPV6ADDRESS_PAT)
 
 # IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
@@ -153,10 +165,13 @@ grammar_dict: Dict[str, str] = {
 # Takes a regex and returns a random string matching that regex
 from hypothesis.strategies import from_regex
 import warnings
+
+
 def generate_random_matching_input(pattern: str) -> str:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return from_regex(r"\A" + pattern + r"\Z").example()
+
 
 # if __name__ == "__main__":
 #     import rfc3986, urllib3, urllib.parse, furl, yarl, hyperlink
