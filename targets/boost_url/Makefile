@@ -1,5 +1,4 @@
-AFL_ROOT:= /home/bkallus/fuzzing/AFLplusplus/
-CXX := $(AFL_ROOT)/afl-clang++
+CXX := afl-clang-fast++
 CXXFLAGS := -Weverything -Wno-c++98-compat -Os
 INCLUDE := ./url/include
 

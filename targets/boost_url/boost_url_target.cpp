@@ -3,12 +3,11 @@
 
 int main() {
     std::string input;
-    {
-        std::string line;
-        while (std::getline(std::cin, line)) {
-            input += line;
-        }
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        input += line;
     }
+
     boost::urls::url const u(input);
     std::cout << "Scheme:   " << (u.scheme() != std::string() ? u.scheme() : "(nil)") << "\n";
     std::cout << "Host:     " << (u.host() != std::string() ? u.host() : "(nil)") << "\n";
