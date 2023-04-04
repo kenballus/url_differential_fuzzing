@@ -14,6 +14,7 @@ import itertools
 import io
 import os
 import re
+import urllib.parse
 from pathlib import PosixPath
 from enum import Enum
 from typing import List, Dict, Set, FrozenSet, Tuple, Callable, Optional
@@ -244,6 +245,27 @@ def main() -> None:
                     # If we get one program to fail while another succeeds, then we're doing good.
                     if fingerprint not in explored:
                         explored.add(fingerprint)
+                        setOfStdouts = set(stdouts)
+                        stdoutsEnumerator = enumerate(stdouts)
+
+                        # Eliminate Differences due to Percent-Encoding if it does not matter
+                        if PERCENT_ENCODING_MATTER == False:
+                            normalizedStdouts: List[bytes] = []
+                            # Normalize Percent-Encoding for each stdout
+                            for i, s in enumerate(stdouts):
+                                stdoutString = f"{s!r}"
+                                normalizedStdout = urllib.parse.unquote(stdoutString)
+                                normalizedStdouts.append(bytes(normalizedStdout, 'utf8'))
+                                # print(
+                                #     color(
+                                #         Color.blue,
+                                #         normalizedStdout
+                                #     )
+                                # )
+                            # Replace stdout set with a set of normalized stdouts
+                            setOfStdouts = set(normalizedStdouts)
+                            stdoutsEnumerator = enumerate(normalizedStdouts)
+
                         if len(set(statuses)) != 1:
                             print(
                                 color(
@@ -255,18 +277,18 @@ def main() -> None:
                                 print(
                                     color(
                                         Color.red if status else Color.blue,
-                                        f"    Exit status {status}:\t{str(TARGET_CONFIGS[i].executable)}",
+                                        f"    Exit status {int(status)}:\t{str(TARGET_CONFIGS[i].executable)}",
                                     )
                                 )
                             exit_status_differentials.append(current_input)
-                        elif len(set(stdouts)) != 1:
+                        elif len(setOfStdouts) != 1:
                             print(
                                 color(
                                     Color.yellow,
                                     f"Output differential: {str(current_input.resolve())}",
                                 )
                             )
-                            for i, s in enumerate(stdouts):
+                            for i, s in stdoutsEnumerator:
                                 print(
                                     color(
                                         Color.yellow,
