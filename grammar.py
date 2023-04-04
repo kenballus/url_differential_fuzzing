@@ -39,9 +39,7 @@ SEGMENT_PAT: str = rf"(?:{PCHAR_PAT}*)"
 SEGMENT_NZ_PAT: str = rf"(?:{PCHAR_PAT}+)"
 
 # path-absolute = "/" [ segment-nz *( "/" segment ) ]
-PATH_ABSOLUTE_PAT: str = (
-    rf"(?P<path_absolute>/(?:{SEGMENT_NZ_PAT}(?:/{SEGMENT_PAT})*)?)"
-)
+PATH_ABSOLUTE_PAT: str = rf"(?P<path_absolute>/(?:{SEGMENT_NZ_PAT}(?:/{SEGMENT_PAT})*)?)"
 PATH_ABSOLUTE_RE: re.Pattern = re.compile(PATH_ABSOLUTE_PAT)
 
 # path-empty = 0<pchar>
@@ -57,9 +55,7 @@ PATH_ABEMPTY_PAT: str = rf"(?P<path_abempty>(?:/{SEGMENT_PAT})*)"
 PATH_ABEMPTY_RE: re.Pattern = re.compile(PATH_ABEMPTY_PAT)
 
 # userinfo = *( unreserved / pct-encoded / sub-delims / ":" )
-USERINFO_PAT: str = (
-    rf"(?P<userinfo>(?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT}|:)*)"
-)
+USERINFO_PAT: str = rf"(?P<userinfo>(?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT}|:)*)"
 USERINFO_RE: re.Pattern = re.compile(USERINFO_PAT)
 
 # dec-octet = DIGIT                 ; 0-9
@@ -70,9 +66,7 @@ USERINFO_RE: re.Pattern = re.compile(USERINFO_PAT)
 DEC_OCTET_PAT: str = rf"(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])"
 
 # IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
-IPV4ADDRESS_PAT: str = (
-    rf"({DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT})"
-)
+IPV4ADDRESS_PAT: str = rf"({DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT})"
 IPV4ADDRESS_RE: re.Pattern = re.compile(IPV4ADDRESS_PAT)
 
 # h16 = 1*4HEXDIG
@@ -141,7 +135,9 @@ AUTHORITY_RE: re.Pattern = re.compile(AUTHORITY_PAT)
 #           / path-absolute
 #           / path-rootless
 #           / path-empty
-HIER_PART_PAT: str = rf"((?://{AUTHORITY_PAT}{PATH_ABEMPTY_PAT})|{PATH_ABSOLUTE_PAT}|{PATH_ROOTLESS_PAT}|{PATH_EMPTY_PAT})"
+HIER_PART_PAT: str = (
+    rf"((?://{AUTHORITY_PAT}{PATH_ABEMPTY_PAT})|{PATH_ABSOLUTE_PAT}|{PATH_ROOTLESS_PAT}|{PATH_EMPTY_PAT})"
+)
 HIER_PART_RE: re.Pattern = re.compile(HIER_PART_PAT)
 
 # URI = scheme ":" hier-part [ "?" query ] [ "#" fragment ]

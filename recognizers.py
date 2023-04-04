@@ -4,28 +4,17 @@
 
 def is_scheme(s: str) -> bool:
     """RFC3986, RFC3987: scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )"""
-    return (
-        s != ""
-        and s.isascii()
-        and s[0].isalpha()
-        and all(c.isalnum() or c in "+-." for c in s[1:])
-    )
+    return s != "" and s.isascii() and s[0].isalpha() and all(c.isalnum() or c in "+-." for c in s[1:])
 
 
 def is_reg_name(s: str) -> bool:
     """RFC3986: reg-name = *( unreserved / pct-encoded / sub-delims )"""
-    return all(
-        is_unreserved(c) or is_sub_delim(c) or is_pct_encoded(s[i : i + 3])
-        for i, c in enumerate(s)
-    )
+    return all(is_unreserved(c) or is_sub_delim(c) or is_pct_encoded(s[i : i + 3]) for i, c in enumerate(s))
 
 
 def is_ireg_name(s: str) -> bool:
     """RFC3987: ireg-name = *( iunreserved / pct-encoded / sub-delims )"""
-    return all(
-        is_iunreserved(c) or is_sub_delim(c) or is_pct_encoded(s[i : i + 3])
-        for i, c in enumerate(s)
-    )
+    return all(is_iunreserved(c) or is_sub_delim(c) or is_pct_encoded(s[i : i + 3]) for i, c in enumerate(s))
 
 
 def is_unreserved(c: str) -> bool:
@@ -121,11 +110,7 @@ def is_url_code_point(c: str) -> bool:
     return (
         (c.isascii() and c.isalnum())
         or c in "!$&'()*+,-./:'=?@_~"
-        or (
-            ord(c) in range(0x00A0, 0x10FFFD + 1)
-            and not is_surrogate(c)
-            and not is_noncharacter(c)
-        )
+        or (ord(c) in range(0x00A0, 0x10FFFD + 1) and not is_surrogate(c) and not is_noncharacter(c))
     )
 
 
@@ -145,9 +130,7 @@ if __name__ == "__main__":
     ]
     count = 0
     for c in map(chr, range(0x110000)):
-        if not is_iunreserved(c) and not is_sub_delim(
-            c
-        ):  # so not allowed in an ireg-name
+        if not is_iunreserved(c) and not is_sub_delim(c):  # so not allowed in an ireg-name
             url = "http://" + c
             for name, parser in parsers:
                 try:

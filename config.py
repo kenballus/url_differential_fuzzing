@@ -22,7 +22,7 @@ TIMEOUT_TIME: int = 100000
 
 # Set this to false if you only care about exit status differentials
 # (i.e. the programs you're testing aren't expected to have identical output on stdout)
-OUTPUT_DIFFERENTIALS_MATTER: bool = False
+OUTPUT_DIFFERENTIALS_MATTER: bool = True
 
 # when this is True, a differential is registered if two targets exit with different status codes.
 # When it's False, a differential is registered only when one target exits with status 0 and another
@@ -47,13 +47,13 @@ class TargetConfig(NamedTuple):
 
 # Configuration for each fuzzing target
 TARGET_CONFIGS: List[TargetConfig] = [
-    # TargetConfig(
-    #    executable=PosixPath("./targets/urllib_target.py"),
-    #    cli_args=[],
-    #    needs_qemu=False,
-    #    needs_python_afl=True,
-    #    env=dict(os.environ),
-    # ),
+    TargetConfig(
+        executable=PosixPath("./targets/urllib_target.py"),
+        cli_args=[],
+        needs_qemu=False,
+        needs_python_afl=True,
+        env=dict(os.environ),
+    ),
     # TargetConfig(
     #    executable=PosixPath("./targets/urllib3_target.py"),
     #    cli_args=[],
@@ -68,13 +68,13 @@ TARGET_CONFIGS: List[TargetConfig] = [
     #    needs_python_afl=True,
     #    env=dict(os.environ),
     # ),
-    # TargetConfig(
-    #    executable=PosixPath("./targets/yarl_target.py"),
-    #    cli_args=[],
-    #    needs_qemu=False,
-    #    needs_python_afl=True,
-    #    env=dict(os.environ),
-    # ),
+    TargetConfig(
+        executable=PosixPath("./targets/yarl_target.py"),
+        cli_args=[],
+        needs_qemu=False,
+        needs_python_afl=True,
+        env=dict(os.environ),
+    ),
     # TargetConfig(
     #    executable=PosixPath("./targets/rfc3986_target.py"),
     #    cli_args=[],
@@ -89,20 +89,20 @@ TARGET_CONFIGS: List[TargetConfig] = [
     #    needs_python_afl=True,
     #    env=dict(os.environ),
     # ),
-    TargetConfig(
-        executable=PosixPath("./targets/curl/curl_target"),
-        cli_args=[],
-        needs_qemu=True,
-        needs_python_afl=False,
-        env=dict(os.environ),
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/libwget/libwget_target"),
-        cli_args=[],
-        needs_qemu=True,
-        needs_python_afl=False,
-        env=dict(os.environ) | {"LD_LIBRARY_PATH": "./targets/libwget/wget2/libwget/.libs/"},
-    ),
+    # TargetConfig(
+    #    executable=PosixPath("./targets/curl/curl_target"),
+    #    cli_args=[],
+    #    needs_qemu=True,
+    #    needs_python_afl=False,
+    #    env=dict(os.environ),
+    # ),
+    # TargetConfig(
+    #    executable=PosixPath("./targets/libwget/libwget_target"),
+    #    cli_args=[],
+    #    needs_qemu=False,
+    #    needs_python_afl=False,
+    #    env=dict(os.environ),
+    # ),
     #    TargetConfig(
     #        executable=PosixPath("./targets/boost_url/boost_url_target"),
     #        cli_args=[],
