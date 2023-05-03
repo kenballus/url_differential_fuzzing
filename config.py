@@ -21,11 +21,11 @@ TRACE_DIR: PosixPath = PosixPath("./traces")
 # Time in milliseconds given to each process
 TIMEOUT_TIME: int = 10000
 
-# Set this to false if you only care about exit status differentials
+# Set this to False if you only care about exit status differentials
 # (i.e. the programs you're testing aren't expected to have identical output on stdout)
 OUTPUT_DIFFERENTIALS_MATTER: bool = True
 
-# when this is True, a differential is registered if two targets exit with different status codes.
+# When this is True, a differential is registered if two targets exit with different status codes.
 # When it's False, a differential is registered only when one target exits with status 0 and another
 # exits with nonzero status.
 EXIT_STATUSES_MATTER: bool = False
@@ -52,6 +52,9 @@ class TargetConfig:
     needs_python_afl: bool = False
     # The environment variables to pass to the executable
     env: Dict[str, str] = field(default_factory=lambda: dict(os.environ))
+    # The character encoding that this program uses for its output
+    # (useful for normalization)
+    encoding: str = 'UTF-8'
 
 
 # Configuration for each fuzzing target
