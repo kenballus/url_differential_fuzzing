@@ -5,7 +5,7 @@ afl.init()
 
 def main():
     url_string = sys.stdin.read()
-    parsed_url = rfc3986.urlparse(url_string)
+    parsed_url = rfc3986.ParseResult.from_string(url_string)
 
     scheme = parsed_url.scheme
     host = parsed_url.host

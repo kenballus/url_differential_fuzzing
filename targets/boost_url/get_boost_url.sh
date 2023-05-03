@@ -1,3 +1,3 @@
 #!/bin/sh
 
-git clone https://github.com/boostorg/url
+git clone --recurse-submodules https://github.com/boostorg/boost.git
