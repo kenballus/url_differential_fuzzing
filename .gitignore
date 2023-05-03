@@ -4,3 +4,4 @@ traces
 url_fuzz_env/*
 .hypothesis/*
 .mypy_cache/*
+python_pkgs/*
