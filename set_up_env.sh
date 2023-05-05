@@ -39,7 +39,7 @@ for PKG in $PYTHON_PKG_DIR/*; do
 done
 
 # These are the packages that we can just get from pypi
-for PKG in hypothesis; do
+for PKG in hypothesis tqdm; do
     pip3 install "$PKG" || { deactivate; fail "Couldn't install $PKG."; }
 done
 
