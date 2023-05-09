@@ -5,7 +5,7 @@
 #############################################################################################
 
 from pathlib import PosixPath
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict
 from dataclasses import dataclass, field
 import os
 
@@ -14,9 +14,6 @@ import os
 # so it's important that the seeds are a decently representative sample
 # of the inputs accepted by the targets.
 SEED_DIR: PosixPath = PosixPath("./seeds")
-
-# Where program traces end up
-TRACE_DIR: PosixPath = PosixPath("./traces")
 
 # Time in milliseconds given to each process
 TIMEOUT_TIME: int = 10000
@@ -32,6 +29,10 @@ EXIT_STATUSES_MATTER: bool = False
 
 # Roughly how many processes to allow in a generation (within a factor of 2)
 ROUGH_DESIRED_QUEUE_LEN: int = 1000
+
+# The number of bytes deleted at a time in the minimization loop
+# The default choice was selected because of UTF-8.
+DELETION_LENGTHS: List[int] = [16, 8, 4, 3, 2, 1]
 
 
 @dataclass
@@ -54,7 +55,7 @@ class TargetConfig:
     env: Dict[str, str] = field(default_factory=lambda: dict(os.environ))
     # The character encoding that this program uses for its output
     # (useful for normalization)
-    encoding: str = 'UTF-8'
+    encoding: str = "UTF-8"
 
 
 # Configuration for each fuzzing target
@@ -67,10 +68,10 @@ TARGET_CONFIGS: List[TargetConfig] = [
         executable=PosixPath("./targets/urllib3_target.py"),
         needs_python_afl=True,
     ),
-    TargetConfig(
-        executable=PosixPath("./targets/furl_target.py"),
-        needs_python_afl=True,
-    ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/furl_target.py"),
+    #     needs_python_afl=True,
+    # ),
     TargetConfig(
         executable=PosixPath("./targets/yarl_target.py"),
         needs_python_afl=True,
@@ -83,13 +84,13 @@ TARGET_CONFIGS: List[TargetConfig] = [
         executable=PosixPath("./targets/hyperlink_target.py"),
         needs_python_afl=True,
     ),
-    TargetConfig(
-        executable=PosixPath("./targets/curl/curl_target"),
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/libwget/libwget_target"),
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/boost_url/boost_url_target"),
-    ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/curl/curl_target"),
+    # ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/libwget/libwget_target"),
+    # ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/boost_url/boost_url_target"),
+    # ),
 ]

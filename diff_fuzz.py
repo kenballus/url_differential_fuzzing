@@ -11,19 +11,19 @@ import multiprocessing
 import random
 import functools
 import itertools
-import io
+import copy
 import os
 import re
 from pathlib import PosixPath
 from enum import Enum
-from typing import List, Dict, Set, FrozenSet, Tuple, Callable, Optional
+from typing import List, Set, FrozenSet, Tuple, Callable
 
 try:
     from tqdm import tqdm  # type: ignore
 except ModuleNotFoundError:
     tqdm = lambda it, **kwargs: it  # type: ignore
 
-from config import *
+import config
 
 HAS_GRAMMAR: bool = False
 try:
@@ -31,26 +31,23 @@ try:
 
     print("Importing grammar from `grammar.py`.", file=sys.stderr)
     HAS_GRAMMAR = True
-except:
+except ModuleNotFoundError:
     print("`grammar.py` not found; disabling grammar-based mutation.", file=sys.stderr)
 
-HAS_NORMALIZATION: bool = False
 try:
-    from normalization import normalize # type: ignore
-    HAS_NORMALIZATION = True
-except:
-    print("`normalization.py not found; disabling stdout normalizers.`", file=sys.stderr)
+    from normalization import normalize  # type: ignore
+except ModuleNotFoundError:
+    print("`normalization.py` not found; disabling stdout normalizers.", file=sys.stderr)
+    normalize = lambda x, _: x  # type: ignore
 
-SEED_INPUTS: List[PosixPath] = list(map(SEED_DIR.joinpath, map(PosixPath, os.listdir(SEED_DIR))))
+assert config.SEED_DIR.is_dir()
+SEED_INPUTS: List[PosixPath] = list(
+    map(lambda s: config.SEED_DIR.joinpath(PosixPath(s)), os.listdir(config.SEED_DIR))
+)
 
-for tc in TARGET_CONFIGS:
-    assert tc.executable.is_file()
-assert TRACE_DIR.is_dir()
-assert SEED_DIR.is_dir()
-for seed in SEED_INPUTS:
-    assert seed.is_file()
+assert all(map(lambda tc: tc.executable.exists(), config.TARGET_CONFIGS))
 
-fingerprint_t = int
+fingerprint_t = Tuple[FrozenSet[int], ...]
 
 
 def grammar_mutate(m: re.Match, _: bytes) -> bytes:
@@ -84,278 +81,263 @@ def byte_delete(b: bytes) -> bytes:
     return b[:index] + b[index + 1 :]
 
 
-def mutate_input(input_filename: PosixPath) -> PosixPath:
-    mutant_filename: PosixPath = PosixPath(f"inputs/{random.randint(0, 2**32-1)}.input")
-    with open(mutant_filename, "wb") as ofile, open(input_filename, "rb") as ifile:
-        b: bytes = ifile.read()
+def mutate_input(b: bytes) -> bytes:
+    mutators: List[Callable[[bytes], bytes]] = [byte_insert]
+    if len(b) > 0:
+        mutators.append(byte_change)
+    if len(b) > 1:
+        mutators.append(byte_delete)
+    if HAS_GRAMMAR:
+        try:
+            m: re.Match | None = re.match(grammar_re, str(b, "UTF-8"))
+            if m is not None:
+                mutators.append(functools.partial(grammar_mutate, m))
+        except UnicodeDecodeError:
+            pass
 
-        mutators: List[Callable[[bytes], bytes]] = [byte_insert]
-        if len(b) > 0:
-            mutators.append(byte_change)
-        if len(b) > 1:
-            mutators.append(byte_delete)
-        if HAS_GRAMMAR:
-            try:
-                m: Optional[re.Match] = re.match(grammar_re, str(b, "UTF-8"))
-                if m is not None:
-                    mutators.append(functools.partial(grammar_mutate, m))
-            except UnicodeDecodeError:
-                pass
-
-        ofile.write(random.choice(mutators)(b))
-
-    return mutant_filename
+    return random.choice(mutators)(b)
 
 
-def parse_trace_file(trace_file: io.TextIOWrapper) -> Dict[int, int]:
-    result: Dict[int, int] = {}
-    for line in trace_file.readlines():
-        edge, count = map(int, line.strip().split(":"))
-        result[edge] = count
-    return result
+def parse_tracer_output(tracer_output: bytes) -> FrozenSet[int]:
+    result: Set[int] = set()
+    for line in tracer_output.split(b"\n"):
+        try:
+            edge, _ = map(int, line.strip().split(b":"))
+            result.add(edge)
+        except ValueError:
+            pass
+    return frozenset(result)
 
 
-def get_trace_length(trace_file: io.TextIOWrapper) -> int:
-    return sum(c for e, c in parse_trace_file(trace_file).items())
-
-
-def get_trace_edge_set(trace_file: io.TextIOWrapper) -> FrozenSet[int]:
-    return frozenset(e for e, c in parse_trace_file(trace_file).items())
-
-
-def get_trace_filename(executable: PosixPath, input_file: PosixPath) -> PosixPath:
-    return TRACE_DIR.joinpath(PosixPath(f"{input_file.name}.{executable.name}.trace"))
-
-
-def make_command_line(target_config: TargetConfig, current_input: PosixPath) -> List[str]:
+def make_command_line(tc: config.TargetConfig) -> List[str]:
     command_line: List[str] = []
-    if target_config.needs_tracing:
-        if target_config.needs_python_afl:
+    if tc.needs_tracing:
+        if tc.needs_python_afl:
             command_line.append("py-afl-showmap")
         else:
             command_line.append("afl-showmap")
-        if target_config.needs_qemu:  # Enable QEMU mode, if necessary
-            command_line.append("-Q")
+            if tc.needs_qemu:  # Enable QEMU mode, if necessary
+                command_line.append("-Q")
         command_line.append("-e")  # Only care about edge coverage; ignore hit counts
-        command_line += [
-            "-o",
-            str(get_trace_filename(target_config.executable, current_input).resolve()),
-        ]
-        command_line += ["-t", str(TIMEOUT_TIME)]
+        command_line += ["-o", "/dev/stdout"]
+        command_line += ["-t", str(config.TIMEOUT_TIME)]
         command_line.append("--")
-        if target_config.needs_python_afl:
-            command_line.append("python3")
 
-    command_line.append(str(target_config.executable.resolve()))
-    command_line += target_config.cli_args
+    if tc.needs_python_afl:
+        command_line.append("python3")
+    command_line.append(str(tc.executable.resolve()))
+    command_line += tc.cli_args
 
     return command_line
 
 
-def run_executables(
-    current_input: PosixPath,
-) -> Tuple[fingerprint_t, Tuple[int, ...], Tuple[bytes, ...]]:
-    traced_procs: List[subprocess.Popen] = []
+def minimize_differential(target_configs: List[config.TargetConfig], bug_inducing_input: bytes) -> bytes:
+    untraced_target_configs: List[config.TargetConfig] = []
+    for tc in target_configs:
+        untraced_tc = copy.copy(tc)  # In the future, might need deepcopy
+        untraced_tc.needs_tracing = False
+        untraced_target_configs.append(untraced_tc)
 
-    # We need these to extract exit statuses
+    _, orig_statuses, orig_stdouts = run_executables(untraced_target_configs, bug_inducing_input)
+
+    orig_stdout_comparisons: Tuple[bool, ...] = (True,)
+    if config.OUTPUT_DIFFERENTIALS_MATTER:
+        orig_stdout_comparisons = tuple(
+            itertools.starmap(bytes.__eq__, itertools.combinations(orig_stdouts, 2))
+        )
+
+    result: bytes = bug_inducing_input
+
+    for deletion_length in config.DELETION_LENGTHS:
+        while True:
+            for reduced_form in (
+                result[:i] + result[i + deletion_length :] for i in range(len(result) - deletion_length + 1)
+            ):
+                _, new_statuses, new_stdouts = run_executables(untraced_target_configs, reduced_form)
+                if new_statuses == orig_statuses:
+                    new_stdout_comparisons: Tuple[bool, ...] = (True,)
+                    if config.OUTPUT_DIFFERENTIALS_MATTER:
+                        new_stdout_comparisons = tuple(
+                            itertools.starmap(bytes.__eq__, itertools.combinations(new_stdouts, 2))
+                        )
+                    if new_stdout_comparisons == orig_stdout_comparisons:
+                        result = reduced_form
+                        break
+            else:
+                break
+
+    return result
+
+
+def run_executables(
+    target_configs: List[config.TargetConfig], current_input: bytes
+) -> Tuple[fingerprint_t, Tuple[int, ...], Tuple[bytes, ...]]:
+    traced_procs: List[subprocess.Popen | None] = []
+
+    # We need these to extract exit statuses and stdouts
     untraced_procs: List[subprocess.Popen] = []
 
-    for target_config in TARGET_CONFIGS:
-        command_line: List[str] = make_command_line(target_config, current_input)
-        if target_config.needs_tracing:
-            with open(current_input) as input_file:
-                traced_procs.append(
-                    subprocess.Popen(
-                        command_line,
-                        stdin=input_file,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        env=target_config.env,
-                    )
-                )
-        with open(current_input) as input_file:
-            untraced_command_line: List[str] = (
-                command_line[command_line.index("--") + 1 :] if target_config.needs_tracing else command_line
+    for tc in target_configs:
+        command_line: List[str] = make_command_line(tc)
+        if tc.needs_tracing:
+            traced_proc: subprocess.Popen = subprocess.Popen(
+                command_line,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                env=tc.env,
             )
-            untraced_procs.append(
-                subprocess.Popen(
-                    untraced_command_line,
-                    stdin=input_file,
-                    stdout=subprocess.PIPE if OUTPUT_DIFFERENTIALS_MATTER else subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    env=target_config.env,
-                )
-            )
+            assert traced_proc.stdin is not None
+            traced_proc.stdin.write(current_input)
+            traced_proc.stdin.close()
+            traced_procs.append(traced_proc)
+        else:
+            traced_procs.append(None)
+
+        untraced_command_line: List[str] = (
+            command_line[command_line.index("--") + 1 :] if tc.needs_tracing else command_line
+        )
+        untraced_proc: subprocess.Popen = subprocess.Popen(
+            untraced_command_line,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE if config.OUTPUT_DIFFERENTIALS_MATTER else subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=tc.env,
+        )
+        assert untraced_proc.stdin is not None
+        untraced_proc.stdin.write(current_input)
+        untraced_proc.stdin.close()
+        untraced_procs.append(untraced_proc)
 
     # Wait for the processes to exit
     for proc in itertools.chain(traced_procs, untraced_procs):
-        proc.wait()
+        if proc is not None:
+            proc.wait()
 
     # Extract their stdouts
     stdouts: List[bytes] = []
-    for proc, target_config in zip(untraced_procs, TARGET_CONFIGS):
+    for proc, tc in zip(untraced_procs, target_configs):
         stdout_bytes: bytes = proc.stdout.read() if proc.stdout is not None else b""
-        if HAS_NORMALIZATION:
-            stdout_bytes = normalize(stdout_bytes, target_config.encoding)
+        stdout_bytes = normalize(stdout_bytes, tc.encoding)
         stdouts.append(stdout_bytes)
 
     # Extract their traces
-    l = []
-    for c in TARGET_CONFIGS:
-        if c.needs_tracing:
-            with open(get_trace_filename(c.executable, current_input)) as trace_file:
-                l.append(get_trace_edge_set(trace_file))
-        else:
-            l.append(frozenset())
+    traces: List[FrozenSet[int]] = []
+    for tc, proc in zip(target_configs, traced_procs):
+        traces.append(
+            parse_tracer_output(proc.stdout.read() if proc is not None and proc.stdout is not None else b"")
+        )
 
-    fingerprint = hash(tuple(l))
+    fingerprint: fingerprint_t = tuple(traces)
 
     statuses: Tuple[int, ...] = (
         tuple(proc.returncode for proc in untraced_procs)
-        if EXIT_STATUSES_MATTER
+        if config.EXIT_STATUSES_MATTER
         else tuple(proc.returncode != 0 for proc in untraced_procs)
     )
     return fingerprint, statuses, tuple(stdouts)
 
 
-def main() -> None:
+def main(target_configs: List[config.TargetConfig]) -> None:
     if len(sys.argv) > 2:
         print(f"Usage: python3 {sys.argv[0]}", file=sys.stderr)
         sys.exit(1)
 
-    input_queue: List[PosixPath] = SEED_INPUTS.copy()
+    input_queue: List[bytes] = []
+    for seed_input in SEED_INPUTS:
+        with open(seed_input, "rb") as f:
+            input_queue.append(f.read())
 
     # One input `I` produces one trace per program being fuzzed.
     # Convert each trace to a (frozen)set of edges by deduplication.
-    # Pack those sets together in a tuple and hash it.
+    # Pack those sets together in a tuple (and maybe hash it).
     # This is a fingerprint of the programs' execution on the input `I`.
     # Keep these fingerprints in a set.
     # An input is worth mutation if its fingerprint is new.
-    explored: Set[fingerprint_t] = set()
+    fingerprints: Set[fingerprint_t] = set()
+    minimized_fingerprints: Set[fingerprint_t] = set()
 
     generation: int = 0
-    exit_status_differentials: List[PosixPath] = []
-    output_differentials: List[PosixPath] = []
-    try:
-        with multiprocessing.Pool(processes=multiprocessing.cpu_count() // (len(TARGET_CONFIGS) * 2)) as pool:
-            while len(input_queue) != 0:  # While there are still inputs to check,
-                print(
-                    color(
-                        Color.green,
-                        f"Starting generation {generation}. {len(input_queue)} inputs to try.",
-                    )
-                )
-                # run the programs on the things in the input queue.
-                fingerprints_and_statuses_and_stdouts = tqdm(
-                    pool.imap(run_executables, input_queue), desc="Running targets", total=len(input_queue)
-                )
+    differentials: List[bytes] = []
 
-                mutation_candidates: List[PosixPath] = []
-                rejected_candidates: List[PosixPath] = []
+    while len(input_queue) != 0:  # While there are still inputs to check,
+        print(
+            color(
+                Color.GREEN,
+                f"Starting generation {generation}.",
+            ),
+            file=sys.stderr,
+        )
+        with multiprocessing.Pool(processes=os.cpu_count()) as pool:
+            # run the programs on the things in the input queue.
+            fingerprints_and_statuses_and_stdouts = tqdm(
+                pool.imap(functools.partial(run_executables, target_configs), input_queue),
+                desc="Running targets",
+                total=len(input_queue),
+            )
 
-                for current_input, (fingerprint, statuses, stdouts) in zip(
-                    input_queue, fingerprints_and_statuses_and_stdouts
-                ):
-                    # If we found something new, mutate it and add its children to the input queue
-                    # If we get one program to fail while another succeeds, then we're doing good.
-                    if fingerprint not in explored:
-                        explored.add(fingerprint)
-                        status_set: Set[int] = set(statuses)
-                        if len(status_set) != 1:
-                            print(
-                                color(
-                                    Color.blue,
-                                    f"Exit Status Differential: {str(current_input.resolve())}",
-                                )
-                            )
-                            for i, status in enumerate(statuses):
-                                print(
-                                    color(
-                                        Color.red if status else Color.blue,
-                                        f"    Exit status {status}:\t{str(TARGET_CONFIGS[i].executable)}",
-                                    )
-                                )
-                            exit_status_differentials.append(current_input)
-                        elif status_set == {0} and len(set(stdouts)) != 1:
-                            print(
-                                color(
-                                    Color.yellow,
-                                    f"Output differential: {str(current_input.resolve())}",
-                                )
-                            )
-                            for i, s in enumerate(stdouts):
-                                print(
-                                    color(
-                                        Color.yellow,
-                                        f"    {str(TARGET_CONFIGS[i].executable)} printed this:\n\t{s!r}",
-                                    )
-                                )
-                            output_differentials.append(current_input)
-                        else:
-                            # We don't mutate exit_status_differentials, even if they're new
-                            # print(color(Color.yellow, f"New coverage: {str(current_input.resolve())}"))
-                            mutation_candidates.append(current_input)
+            mutation_candidates: List[bytes] = []
+
+            for current_input, (fingerprint, statuses, stdouts) in zip(
+                input_queue, fingerprints_and_statuses_and_stdouts
+            ):
+                # If we found something new, mutate it and add its children to the input queue
+                # If we get one program to fail while another succeeds, then we're doing good.
+                if fingerprint not in fingerprints:
+                    fingerprints.add(fingerprint)
+                    status_set: Set[int] = set(statuses)
+                    if (len(status_set) != 1) or (status_set == {0} and len(set(stdouts)) != 1):
+                        minimized_input: bytes = minimize_differential(target_configs, current_input)
+                        minimized_fingerprint, _, _ = run_executables(target_configs, minimized_input)
+                        if minimized_fingerprint not in minimized_fingerprints:
+                            differentials.append(minimized_input)
+                            minimized_fingerprints.add(minimized_fingerprint)
                     else:
-                        # print(color(Color.grey, f"No new coverage: {str(current_input.resolve())}"))
-                        rejected_candidates.append(current_input)
+                        mutation_candidates.append(current_input)
 
-                input_queue = []
-                while mutation_candidates != [] and len(input_queue) < ROUGH_DESIRED_QUEUE_LEN:
-                    for input_to_mutate in mutation_candidates:
-                        input_queue.append(mutate_input(input_to_mutate))
+        input_queue.clear()
+        while len(mutation_candidates) != 0 and len(input_queue) < config.ROUGH_DESIRED_QUEUE_LEN:
+            input_queue += list(map(mutate_input, mutation_candidates))
 
-                for reject in rejected_candidates:
-                    if reject not in SEED_INPUTS:
-                        os.remove(reject)
+        print(
+            color(
+                Color.GREEN,
+                f"End of generation {generation}.\n"
+                + f"Differentials:\t\t{len(differentials)}\n"
+                + f"Mutation candidates:\t{len(mutation_candidates)}",
+            ),
+            file=sys.stderr,
+        )
+        generation += 1
 
-                print(
-                    color(
-                        Color.green,
-                        f"End of generation {generation}.\n"
-                        f"Output differentials:\t\t{len(output_differentials)}\n"
-                        f"Exit status differentials:\t{len(exit_status_differentials)}\n"
-                        f"Mutation candidates:\t\t{len(mutation_candidates)}",
-                    )
-                )
-
-                fingerprints: List[fingerprint_t] = []
-                proc_lists: List[subprocess.Popen] = []
-                generation += 1
-    except KeyboardInterrupt:
-        pass
-
-    if exit_status_differentials == output_differentials == []:
-        print("No differentials found! Try increasing ROUGH_DESIRED_QUEUE_LEN.")
+    if len(differentials) != 0:
+        print("Differentials:", file=sys.stderr)
+        print("\n".join(repr(b) for b in differentials))
     else:
-        if exit_status_differentials != []:
-            print(f"Exit status differentials:")
-            print("\n".join(str(f.resolve()) for f in exit_status_differentials))
-        if output_differentials != []:
-            print(f"Output differentials:")
-            print("\n".join(str(f.resolve()) for f in output_differentials))
+        print("No differentials found! Try increasing config.ROUGH_DESIRED_QUEUE_LEN.", file=sys.stderr)
 
 
 # For pretty printing
 class Color(Enum):
-    red = 0
-    blue = 1
-    green = 2
-    yellow = 3
-    grey = 4
-    none = 5
+    RED = 0
+    BLUE = 1
+    GREEN = 2
+    YELLOW = 3
+    GREY = 4
+    NONE = 5
 
 
-def color(color: Color, s: str):
-    COLOR_CODES = {
-        Color.red: "\033[0;31m",
-        Color.blue: "\033[0;34m",
-        Color.green: "\033[0;32m",
-        Color.yellow: "\033[0;33m",
-        Color.grey: "\033[0;90m",
-        Color.none: "\033[0m",
+def color(c: Color, s: str):
+    color_codes = {
+        Color.RED: "\033[0;31m",
+        Color.BLUE: "\033[0;34m",
+        Color.GREEN: "\033[0;32m",
+        Color.YELLOW: "\033[0;33m",
+        Color.GREY: "\033[0;90m",
+        Color.NONE: "\033[0m",
     }
-    return COLOR_CODES[color] + s + COLOR_CODES[Color.none]
+    return color_codes[c] + s + color_codes[Color.NONE]
 
 
 if __name__ == "__main__":
-    main()
+    main(config.TARGET_CONFIGS)
