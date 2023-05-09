@@ -28,11 +28,11 @@ OUTPUT_DIFFERENTIALS_MATTER: bool = True
 EXIT_STATUSES_MATTER: bool = False
 
 # Roughly how many processes to allow in a generation (within a factor of 2)
-ROUGH_DESIRED_QUEUE_LEN: int = 1000
+ROUGH_DESIRED_QUEUE_LEN: int = 100
 
 # The number of bytes deleted at a time in the minimization loop
 # The default choice was selected because of UTF-8.
-DELETION_LENGTHS: List[int] = [16, 8, 4, 3, 2, 1]
+DELETION_LENGTHS: List[int] = [4, 3, 2, 1]
 
 
 @dataclass
@@ -76,14 +76,14 @@ TARGET_CONFIGS: List[TargetConfig] = [
         executable=PosixPath("./targets/yarl_target.py"),
         needs_python_afl=True,
     ),
-    TargetConfig(
-        executable=PosixPath("./targets/rfc3986_target.py"),
-        needs_python_afl=True,
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/hyperlink_target.py"),
-        needs_python_afl=True,
-    ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/rfc3986_target.py"),
+    #     needs_python_afl=True,
+    # ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/hyperlink_target.py"),
+    #     needs_python_afl=True,
+    # ),
     # TargetConfig(
     #     executable=PosixPath("./targets/curl/curl_target"),
     # ),
