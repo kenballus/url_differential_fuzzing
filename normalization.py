@@ -1,24 +1,28 @@
-from typing import Set, Iterator
-import itertools
+from base64 import b64decode
+from dataclasses import fields
+from config import ParseTree
 
-def normalize(program_stdout: bytes, encoding: str) -> bytes:
-    return percent_decode(program_stdout.decode(encoding)).encode(encoding)
+def normalize(parse_tree: ParseTree) -> ParseTree:
+    return ParseTree(**{field.name: percent_decode(b64decode(getattr(parse_tree, field.name))) for field in fields(ParseTree)})
 
-HEXDIGS: Set[str] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "A", "B", "C", "D", "E", "F"}
-def percent_decode(percent_encoded: str) -> str:
-    if len(percent_encoded) < 3:
-        return percent_encoded
-    i1: Iterator[str] = iter(percent_encoded)
-    i2: Iterator[str] = iter(percent_encoded); next(i2)
-    i3: Iterator[str] = iter(percent_encoded); next(i3); next(i3)
-    output: str = ""
-    to_skip: int = 0
-    for c1, c2, c3 in itertools.zip_longest(i1, i2, i3):
-        if to_skip > 0:
-            to_skip -= 1
-        elif c1 == "%" and c2 in HEXDIGS and c3 in HEXDIGS:
-            output += chr(int(c2 + c3, 16))
-            to_skip = 2
+HEXDIGS: bytes = b"123354567890abcdefABCDEF"
+# Technically, operating at the byte level here might be a problem.
+# It is possible that a UTF-8 character contains a byte subsequence
+# that looks like % HEXDIG HEXDIG.
+# I have searched for such a character and haven't found one, and will
+# deal with this problem if it comes up.
+def percent_decode(percent_encoded: bytes) -> bytes:
+    output: bytes = b""
+    i: int = 0
+    while i < len(percent_encoded):
+        if len(percent_encoded) - i < 3:
+            output += percent_encoded[i:]
+            break
+        c1, c2, c3 = percent_encoded[i:i + 3]
+        if c1 == ord("%") and c2 in HEXDIGS and c3 in HEXDIGS:
+            output += bytes((int(chr(c2) + chr(c3), 16),))
+            i += 3
         else:
-            output += c1
+            output += bytes((c1,))
+            i += 1
     return output

@@ -1,26 +1,23 @@
-import sys
+from sys import stdin
+from base64 import b64encode
 import furl
 import afl
 afl.init()
 
 def main():
-    url_string = sys.stdin.read()
+    url_string = stdin.read()
     parsed_url = furl.furl(url_string)
 
-    scheme = str(parsed_url.scheme) if parsed_url.scheme is not None else None
-    host = str(parsed_url.host) if parsed_url.host is not None else None
-    path = str(parsed_url.path) if parsed_url.path is not None else None
-    port = parsed_url.port
-    query = str(parsed_url.query) if parsed_url.query is not None else None
-    userinfo = str(parsed_url.username) if parsed_url.username is not None else None
-    fragment = str(parsed_url.fragment) if parsed_url.fragment is not None else None
+    result = {}
+    result["scheme"] = parsed_url.scheme
+    result["host"] = parsed_url.host
+    result["path"] = str(parsed_url.path)
+    result["port"] = str(parsed_url.port)
+    result["query"] = str(parsed_url.query)
+    result["userinfo"] = parsed_url.username + ((':' + parsed_url.password) if parsed_url.password is not None else "")
+    result["fragment"] = str(parsed_url.fragment)
 
-    print(f"Scheme:   {scheme if scheme else '(nil)'}")
-    print(f"Userinfo: {userinfo if userinfo else '(nil)'}")
-    print(f"Host:     {host if host else '(nil)'}")
-    print(f"Port:     {port if port not in (b'', '', None) else '(nil)'}")
-    print(f"Path:     {path if path else '(nil)'}")
-    print(f"Query:    {query if query else '(nil)'}")
-    print(f"Fragment: {fragment if fragment else '(nil)'}")
+    print("{" + ",".join(f"\"{k}\":\"{b64encode(result[k].encode('utf-8')).decode('ascii') if result[k] is not None else ''}\"" for k, v in result.items()) + "}")
+
 if __name__ == "__main__":
     main()

@@ -7,13 +7,16 @@
 from pathlib import PosixPath
 from typing import List, Dict
 from dataclasses import dataclass, field
-import os
+from os import environ
 
 # The directory where the seed inputs are
 # The seeds are the files from which all the fuzzing inputs are produced,
 # so it's important that the seeds are a decently representative sample
 # of the inputs accepted by the targets.
 SEED_DIR: PosixPath = PosixPath("./seeds")
+
+# The directory where the findings go when the fuzzer run finishes.
+RESULTS_DIR: PosixPath = PosixPath("./results")
 
 # Time in milliseconds given to each process
 TIMEOUT_TIME: int = 10000
@@ -35,7 +38,23 @@ ROUGH_DESIRED_QUEUE_LEN: int = 100
 DELETION_LENGTHS: List[int] = [4, 3, 2, 1]
 
 
-@dataclass
+# This is the parse tree class for your programs' output.
+# If OUTPUT_DIFFERENTIALS_MATTER is set to False, then you can leave this as it is.
+# Otherwise, it should have a `bytes` field for each field in your programs'
+# output JSON.
+@dataclass(frozen=True)
+class ParseTree:
+    scheme: bytes
+    host: bytes
+    path: bytes
+    port: bytes
+    query: bytes
+    userinfo: bytes
+    fragment: bytes
+
+
+# This is the configuration class for each target program.
+@dataclass(frozen=True)
 class TargetConfig:
     # The path to this target's executable
     executable: PosixPath
@@ -52,7 +71,7 @@ class TargetConfig:
     # Whether this executable needs to run with python-afl (is a python script)
     needs_python_afl: bool = False
     # The environment variables to pass to the executable
-    env: Dict[str, str] = field(default_factory=lambda: dict(os.environ))
+    env: Dict[str, str] = field(default_factory=lambda: dict(environ))
     # The character encoding that this program uses for its output
     # (useful for normalization)
     encoding: str = "UTF-8"
@@ -60,10 +79,10 @@ class TargetConfig:
 
 # Configuration for each fuzzing target
 TARGET_CONFIGS: List[TargetConfig] = [
-    TargetConfig(
-        executable=PosixPath("./targets/urllib_target.py"),
-        needs_python_afl=True,
-    ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/urllib_target.py"),
+    #     needs_python_afl=True,
+    # ),
     TargetConfig(
         executable=PosixPath("./targets/urllib3_target.py"),
         needs_python_afl=True,
