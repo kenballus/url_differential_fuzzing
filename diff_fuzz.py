@@ -251,10 +251,13 @@ def main() -> None:
     minimized_fingerprints: Set[fingerprint_t] = set()
 
     generation: int = 0
-    differentials: List[bytes] = []
+    minimized_differentials: List[bytes] = []
 
     while len(input_queue) != 0:  # While there are still inputs to check,
         print(f"Starting generation {generation}.", file=sys.stderr)
+        mutation_candidates: List[bytes] = []
+        differentials: List[bytes] = []
+
         with multiprocessing.Pool(processes=os.cpu_count()) as pool:
             # run the programs on the things in the input queue.
             fingerprint_and_statuses_and_stdouts = tqdm(
@@ -262,8 +265,6 @@ def main() -> None:
                 desc="Running targets",
                 total=len(input_queue),
             )
-
-            mutation_candidates: List[bytes] = []
 
             for current_input, (fingerprint, statuses, stdouts) in zip(
                 input_queue, fingerprint_and_statuses_and_stdouts
@@ -273,14 +274,24 @@ def main() -> None:
                 if fingerprint not in fingerprints:
                     fingerprints.add(fingerprint)
                     status_set: Set[int] = set(statuses)
+                    # Sort into mutations and differentials
                     if (len(status_set) != 1) or (status_set == {0} and len(set(stdouts)) != 1):
-                        minimized_input: bytes = minimize_differential(current_input)
-                        minimized_fingerprint, _, _ = run_executables(minimized_input)
-                        if minimized_fingerprint not in minimized_fingerprints:
-                            differentials.append(minimized_input)
-                            minimized_fingerprints.add(minimized_fingerprint)
+                        differentials.append(current_input)
                     else:
                         mutation_candidates.append(current_input)
+        
+        # Minimize all the found differentials
+        with multiprocessing.Pool(processes=os.cpu_count()) as pool:
+            minimized_inputs = tqdm(
+                pool.imap(minimize_differential, differentials),
+                desc="Minimizing Differentials",
+                total=len(differentials),
+            )
+            for minimized_input in minimized_inputs:
+                minimized_fingerprint, _, _ = run_executables(minimized_input)
+                if minimized_fingerprint not in minimized_fingerprints:
+                    minimized_differentials.append(minimized_input)
+                    minimized_fingerprints.add(minimized_fingerprint)
 
         input_queue.clear()
         while len(mutation_candidates) != 0 and len(input_queue) < config.ROUGH_DESIRED_QUEUE_LEN:
@@ -288,15 +299,15 @@ def main() -> None:
 
         print(
             f"End of generation {generation}.\n"
-            + f"Differentials:\t\t{len(differentials)}\n"
+            + f"Differentials:\t\t{len(minimized_differentials)}\n"
             + f"Mutation candidates:\t{len(mutation_candidates)}",
             file=sys.stderr,
         )
         generation += 1
 
-    if len(differentials) != 0:
+    if len(minimized_differentials) != 0:
         print("Differentials:", file=sys.stderr)
-        print("\n".join(repr(b) for b in differentials))
+        print("\n".join(repr(b) for b in minimized_differentials))
     else:
         print("No differentials found! Try increasing config.ROUGH_DESIRED_QUEUE_LEN.", file=sys.stderr)
 
