@@ -293,7 +293,7 @@ def main(minimized_differentials: List[bytes]) -> None:
             # run the programs on the things in the input queue.
             fingerprint_and_statuses_and_parse_trees = tqdm(
                 pool.imap(run_executables, input_queue),
-                desc="Running targets         ",
+                desc="Running targets",
                 total=len(input_queue),
             )
 
