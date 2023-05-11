@@ -23,12 +23,16 @@ TIMEOUT_TIME: int = 10000
 
 # Set this to False if you only care about exit status differentials
 # (i.e. the programs you're testing aren't expected to have identical output on stdout)
-OUTPUT_DIFFERENTIALS_MATTER: bool = True
+DETECT_OUTPUT_DIFFERENTIALS: bool = False
+
+# Set this to True if you want to use grammar mutations.
+# (Requires a grammar.py with the appropriate interface)
+USE_GRAMMAR_MUTATIONS: bool = True
 
 # When this is True, a differential is registered if two targets exit with different status codes.
 # When it's False, a differential is registered only when one target exits with status 0 and another
 # exits with nonzero status.
-EXIT_STATUSES_MATTER: bool = False
+DIFFERENTIATE_NONZERO_EXIT_STATUSES: bool = False
 
 # Roughly how many processes to allow in a generation (within a factor of 2)
 ROUGH_DESIRED_QUEUE_LEN: int = 100
@@ -39,7 +43,7 @@ DELETION_LENGTHS: List[int] = [4, 3, 2, 1]
 
 
 # This is the parse tree class for your programs' output.
-# If OUTPUT_DIFFERENTIALS_MATTER is set to False, then you can leave this as it is.
+# If DETECT_OUTPUT_DIFFERENTIALS is set to False, then you can leave this as it is.
 # Otherwise, it should have a `bytes` field for each field in your programs'
 # output JSON.
 @dataclass(frozen=True)

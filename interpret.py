@@ -7,7 +7,7 @@ from normalization import normalize
 
 def main(input_file: io.BufferedReader) -> None:
     fingerprint, statuses, parse_trees = run_executables(input_file.read())
-    for tc, status, parse_tree in zip(TARGET_CONFIGS, statuses, map(normalize, parse_trees)):
+    for tc, status, parse_tree in zip(TARGET_CONFIGS, statuses, parse_trees):
         print(tc.executable)
         print(status)
         print(parse_tree)
