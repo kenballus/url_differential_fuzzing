@@ -83,37 +83,37 @@ class TargetConfig:
 
 # Configuration for each fuzzing target
 TARGET_CONFIGS: List[TargetConfig] = [
-    # TargetConfig(
-    #     executable=PosixPath("./targets/urllib_target.py"),
-    #     needs_python_afl=True,
-    # ),
     TargetConfig(
-        executable=PosixPath("./targets/urllib3_target.py"),
+        executable=PosixPath("./targets/urllib/urllib_target"),
         needs_python_afl=True,
     ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/furl_target.py"),
-    #     needs_python_afl=True,
-    # ),
     TargetConfig(
-        executable=PosixPath("./targets/yarl_target.py"),
+        executable=PosixPath("./targets/urllib3/urllib3_target"),
         needs_python_afl=True,
     ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/rfc3986_target.py"),
-    #     needs_python_afl=True,
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/hyperlink_target.py"),
-    #     needs_python_afl=True,
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/curl/curl_target"),
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/libwget/libwget_target"),
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/boost_url/boost_url_target"),
-    # ),
+    TargetConfig(
+        executable=PosixPath("./targets/furl/furl_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/yarl/yarl_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/rfc3986/rfc3986_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/hyperlink/hyperlink_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/curl/curl_target"),
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/libwget/libwget_target"),
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/boost_url/boost_url_target"),
+    ),
 ]

@@ -3,8 +3,7 @@ all: format typecheck lint
 	python3 diff_fuzz.py
 
 format:
-	black -l 110 diff_fuzz.py
-	black -l 110 config.py
+	black -l 110 diff_fuzz.py config.py normalization.py
 
 typecheck:
 	mypy diff_fuzz.py
