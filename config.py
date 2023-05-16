@@ -5,7 +5,7 @@
 #############################################################################################
 
 from pathlib import PosixPath
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from dataclasses import dataclass, field
 from os import environ
 
@@ -57,6 +57,22 @@ class ParseTree:
     fragment: bytes
 
 
+# This is the comparison operation on optional parse trees.
+# During minimization, the result of the function is preserved.
+# If your programs' output is expected to match completely, then leave this as-is.
+# Otherwise, rewrite it to implement an equivalence operation between your parse trees.
+def compare_parse_trees(t1: ParseTree | None, t2: ParseTree | None) -> Tuple[bool, ...]:
+    return (t1 is t2,) if t1 is None or t2 is None else (
+        t1.scheme == t2.scheme,
+        t1.host == t2.host,
+        t1.path == t2.path or all(path in (b"", b"/") for path in (t1.path, t2.path)),
+        t1.port == t2.port,
+        t1.query == t2.query,
+        t1.userinfo == t2.userinfo,
+        t1.fragment == t2.fragment,
+    )
+
+
 # This is the configuration class for each target program.
 @dataclass(frozen=True)
 class TargetConfig:
@@ -76,9 +92,6 @@ class TargetConfig:
     needs_python_afl: bool = False
     # The environment variables to pass to the executable
     env: Dict[str, str] = field(default_factory=lambda: dict(environ))
-    # The character encoding that this program uses for its output
-    # (useful for normalization)
-    encoding: str = "UTF-8"
 
 
 # Configuration for each fuzzing target
