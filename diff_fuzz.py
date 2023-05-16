@@ -332,22 +332,21 @@ def main(minimized_differentials: List[bytes]) -> None:
         mutation_candidates: List[bytes] = []
         differentials: List[bytes] = []
 
-        with multiprocessing.Pool(os.cpu_count()) as pool:
-
-            # run the programs on the things in the input queue.
-            input_queue_pos: int = 0
-            batches: List[List[bytes]] = []
-            num_cpus: int|None = os.cpu_count()
-            assert num_cpus is not None
-            for cpu in range(num_cpus):
-                batch: List[bytes] = []
-                for _ in range(len(input_queue) // num_cpus + 1):
-                    if input_queue_pos >= len(input_queue):
-                        break
-                    batch.append(input_queue[input_queue_pos])
-                    input_queue_pos += 1
-                batches.append(batch)
+        # run the programs on the things in the input queue.
+        input_queue_pos: int = 0
+        batches: List[List[bytes]] = []
+        num_cpus: int|None = os.cpu_count()
+        assert num_cpus is not None
+        for cpu in range(num_cpus):
+            batch: List[bytes] = []
+            for _ in range(len(input_queue) // num_cpus + 1):
+                if input_queue_pos >= len(input_queue):
+                    break
+                batch.append(input_queue[input_queue_pos])
+                input_queue_pos += 1
+            batches.append(batch)
             
+        with multiprocessing.Pool(os.cpu_count()) as pool:
 
             batch_executions = tqdm(
                 pool.imap(run_executables, batches),
@@ -362,20 +361,22 @@ def main(minimized_differentials: List[bytes]) -> None:
                 all_statuses.extend(execution_statuses)
                 all_parse_trees.extend(execution_parse_trees)
 
-            for current_input, fingerprint, statuses, parse_trees in zip(
-                input_queue, all_fingerprints, all_statuses, all_parse_trees
-            ):
-                # If we found something new, mutate it and add its children to the input queue
-                # If we get one program to fail while another succeeds, then we're doing good.
-                if fingerprint not in seen_fingerprints:
-                    seen_fingerprints.add(fingerprint)
-                    status_set: Set[int] = set(statuses)
-                    if (len(status_set) != 1) or (
-                        DETECT_OUTPUT_DIFFERENTIALS and status_set == {0} and len(set(parse_trees)) != 1
-                    ):
-                        differentials.append(current_input)
-                    else:
-                        mutation_candidates.append(current_input)
+        for current_input, fingerprint, statuses, parse_trees in zip(
+            input_queue, all_fingerprints, all_statuses, all_parse_trees
+        ):
+            # If we found something new, mutate it and add its children to the input queue
+            # If we get one program to fail while another succeeds, then we're doing good.
+            if fingerprint not in seen_fingerprints:
+                seen_fingerprints.add(fingerprint)
+                status_set: Set[int] = set(statuses)
+                if (len(status_set) != 1) or (
+                    DETECT_OUTPUT_DIFFERENTIALS and status_set == {0} and len(set(parse_trees)) != 1
+                ):
+                    differentials.append(current_input)
+                else:
+                    mutation_candidates.append(current_input)
+
+        with multiprocessing.Pool(os.cpu_count()) as pool:
 
             minimized_inputs_tqdm = tqdm(
                 pool.imap(minimize_differential, differentials),
@@ -384,15 +385,16 @@ def main(minimized_differentials: List[bytes]) -> None:
             )
 
             minimized_inputs = list(minimized_inputs_tqdm)
-            # TODO: Make this into a batch?
-            generation_minimized_fingerprints = run_executables(minimized_inputs)[0] if len(minimized_inputs) > 0 else []
 
-            for minimized_fingerprint, minimized_input in zip(
-                generation_minimized_fingerprints, minimized_inputs
-            ):
-                if minimized_fingerprint not in minimized_fingerprints:
-                    minimized_differentials.append(minimized_input)
-                    minimized_fingerprints.add(minimized_fingerprint)
+        # TODO: Multiprocess this?
+        generation_minimized_fingerprints = run_executables(minimized_inputs)[0] if len(minimized_inputs) > 0 else []
+
+        for minimized_fingerprint, minimized_input in zip(
+            generation_minimized_fingerprints, minimized_inputs
+        ):
+            if minimized_fingerprint not in minimized_fingerprints:
+                minimized_differentials.append(minimized_input)
+                minimized_fingerprints.add(minimized_fingerprint)
 
         input_queue.clear()
         while len(mutation_candidates) != 0 and len(input_queue) < ROUGH_DESIRED_QUEUE_LEN:
