@@ -1,5 +1,5 @@
 CC := afl-clang-fast
-CFLAGS : -Os
+CFLAGS := -Os
 INCLUDE := wget2/include
 
 libwget_target: libwget_target.c wget2/libwget/.libs/libwget.a
