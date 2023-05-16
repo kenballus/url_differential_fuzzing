@@ -36,6 +36,8 @@ from config import (
     DELETION_LENGTHS,
     RESULTS_DIR,
     USE_GRAMMAR_MUTATIONS,
+    GENERATION_DIR,
+    TRACE_DIR,
 )
 
 if USE_GRAMMAR_MUTATIONS:
@@ -57,6 +59,10 @@ assert SEED_DIR.is_dir()
 SEED_INPUTS: List[PosixPath] = list(map(lambda s: SEED_DIR.joinpath(PosixPath(s)), os.listdir(SEED_DIR)))
 
 assert RESULTS_DIR.is_dir()
+
+assert GENERATION_DIR.is_dir()
+
+assert TRACE_DIR.is_dir()
 
 assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 
@@ -122,7 +128,7 @@ def parse_tracer_output(tracer_output: bytes) -> FrozenSet[int]:
     return frozenset(result)
 
 
-def make_command_line(tc: TargetConfig) -> List[str]:
+def make_command_line(tc: TargetConfig, input_dir: PosixPath, output_dir: PosixPath) -> List[str]:
     command_line: List[str] = []
     if tc.needs_tracing:
         if tc.needs_python_afl:
@@ -131,8 +137,9 @@ def make_command_line(tc: TargetConfig) -> List[str]:
             command_line.append("afl-showmap")
             if tc.needs_qemu:  # Enable QEMU mode, if necessary
                 command_line.append("-Q")
+        command_line += ["-i", str(input_dir.resolve())]
+        command_line += ["-o", str(output_dir.resolve())]
         command_line.append("-e")  # Only care about edge coverage; ignore hit counts
-        command_line += ["-o", "/dev/stdout"]
         command_line += ["-t", str(TIMEOUT_TIME)]
         command_line.append("--")
 
@@ -157,8 +164,9 @@ def field_cmp(t1: ParseTree | None, t2: ParseTree | None) -> Tuple[bool, ...]:
 
 
 def minimize_differential(bug_inducing_input: bytes) -> bytes:
-    _, orig_statuses, orig_parse_trees = run_executables(bug_inducing_input, disable_tracing=True)
-
+    _, list_orig_statuses, list_orig_parse_trees = run_executables([bug_inducing_input], disable_tracing=True)
+    orig_statuses = list_orig_statuses[0]
+    orig_parse_trees = list_orig_parse_trees[0]
     needs_parse_tree_comparison: bool = len(set(orig_statuses)) == 1
 
     orig_parse_tree_comparisons: List[Tuple[bool, ...]] = (
@@ -173,7 +181,12 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
         i: int = len(result) - deletion_length
         while i >= 0:
             reduced_form: bytes = result[:i] + result[i + deletion_length :]
-            _, new_statuses, new_parse_trees = run_executables(reduced_form)
+            # print("1 : " + str(orig_statuses))
+            _ , list_new_statuses, list_new_parse_trees = run_executables([reduced_form], disable_tracing=True)
+            new_statuses = list_new_statuses[0]
+            new_parse_trees = list_new_parse_trees[0]
+            # print("2 : " + str(orig_statuses))
+            # print(str(new_statuses) + "vs" + str(orig_statuses))
             if (
                 new_statuses == orig_statuses
                 and (
@@ -183,84 +196,127 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
                 )
                 == orig_parse_tree_comparisons
             ):
+                # print(new_statuses is orig_statuses)
                 result = reduced_form
+                # print(result)
                 i -= deletion_length
             else:
                 i -= 1
-
+    print(result)
     return result
 
+@functools.lru_cache # TODO: Fix up memoization?
+def run_executables(current_inputs: List[bytes], disable_tracing: bool = False) -> Tuple[
+                                                                                        List[fingerprint_t],
+                                                                                        List[Tuple[int, ...]],
+                                                                                        List[Tuple[ParseTree | None, ...]]]:
 
-@functools.lru_cache
-def run_executables(
-    current_input: bytes, disable_tracing: bool = False
-) -> Tuple[fingerprint_t, Tuple[int, ...], Tuple[ParseTree | None, ...]]:
     traced_procs: List[subprocess.Popen | None] = []
+
+    if not disable_tracing:
+        # Clear the needed directories
+        for f in os.listdir(GENERATION_DIR):
+            os.remove(os.path.join(GENERATION_DIR, f))
+        for f in os.listdir(TRACE_DIR):
+            second_dir = os.path.join(TRACE_DIR, f)
+            for f2 in os.listdir(second_dir):
+                os.remove(os.path.join(second_dir, f2))
+            os.rmdir(os.path.join(TRACE_DIR, f))
+
+        # Write the inputs into files
+        for current_input, i in zip(current_inputs, range(len(current_inputs))):
+            with open(GENERATION_DIR.joinpath(str(i)), "wb") as input_file:
+                input_file.write(current_input)
+
+        for tc, i in zip(TARGET_CONFIGS, range(len(TARGET_CONFIGS))):
+            # Create an output folder
+            output_dir = TRACE_DIR.joinpath(str(i))
+            os.mkdir(output_dir)
+            command_line: List[str] = make_command_line(tc, GENERATION_DIR, output_dir)
+            if not disable_tracing and tc.needs_tracing:
+                traced_proc: subprocess.Popen = subprocess.Popen(
+                    command_line,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    env=tc.env,
+                )
+                traced_procs.append(traced_proc)
+            else:
+                traced_procs.append(None)
 
     # We need these to extract exit statuses and parse_trees
     untraced_procs: List[subprocess.Popen] = []
-
-    for tc in TARGET_CONFIGS:
-        command_line: List[str] = make_command_line(tc)
-        if not disable_tracing and tc.needs_tracing:
-            traced_proc: subprocess.Popen = subprocess.Popen(
-                command_line,
+    for current_input in current_inputs:
+        for tc in TARGET_CONFIGS:
+            full_command_line: List[str] = make_command_line(tc, GENERATION_DIR, TRACE_DIR)
+            untraced_command_line: List[str] = full_command_line[full_command_line.index("--") + 1 :]
+            untraced_proc: subprocess.Popen = subprocess.Popen(
+                untraced_command_line,
                 stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
+                stdout=subprocess.PIPE if DETECT_OUTPUT_DIFFERENTIALS else subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 env=tc.env,
             )
-            assert traced_proc.stdin is not None
-            traced_proc.stdin.write(current_input)
-            traced_proc.stdin.close()
-            traced_procs.append(traced_proc)
-        else:
-            traced_procs.append(None)
-
-        untraced_command_line: List[str] = (
-            command_line[command_line.index("--") + 1 :] if tc.needs_tracing else command_line
-        )
-        untraced_proc: subprocess.Popen = subprocess.Popen(
-            untraced_command_line,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE if DETECT_OUTPUT_DIFFERENTIALS else subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=tc.env,
-        )
-        assert untraced_proc.stdin is not None
-        untraced_proc.stdin.write(current_input)
-        untraced_proc.stdin.close()
-        untraced_procs.append(untraced_proc)
+            assert untraced_proc.stdin is not None
+            untraced_proc.stdin.write(current_input)
+            untraced_proc.stdin.close()
+            untraced_procs.append(untraced_proc)
 
     # Wait for the processes to exit
-    for proc in itertools.chain(traced_procs, untraced_procs):
+    for proc in itertools.chain(untraced_procs, traced_procs):
         if proc is not None:
             proc.wait()
 
-    # Extract their exit statuses
-    statuses: Tuple[int, ...] = (
-        tuple(proc.returncode for proc in untraced_procs)
-        if DIFFERENTIATE_NONZERO_EXIT_STATUSES
-        else tuple(int(proc.returncode) for proc in untraced_procs)
-    )
+    all_fingerprints: List[Tuple[FrozenSet[int], ...]] = []
+    if not disable_tracing:
+        all_traces: List[List[FrozenSet[int]]] = []
+        # Collect Fingerprints TODO: Clean this up
+        for proc, i in zip(traced_procs, range(len(traced_procs))):
+            if proc is not None:
+                traces: List[FrozenSet[int]] = []
+                output_dir = TRACE_DIR.joinpath(str(i))
+                for i in range(len(current_inputs)):
+                    output_filename = output_dir.joinpath(str(i))
+                    if os.path.isfile(output_filename):
+                        with open(output_filename, "rb") as trace_file:
+                            traces.append(parse_tracer_output(trace_file.read()))
+                    else:  # Empty Input
+                        traces.append(frozenset())
+                all_traces.append(traces)
+            else:
+                all_traces.append([])
 
-    # Extract their parse trees
-    parse_trees: List[ParseTree | None] = [
-        normalize(ParseTree(**{k: v.encode(tc.encoding) for k, v in json.loads(proc.stdout.read()).items()}))
-        if proc.stdout is not None and status == 0
-        else None
-        for proc, status, tc in zip(untraced_procs, statuses, TARGET_CONFIGS)
-    ]
+        # Convert output into the format we want TODO: Check if necessary
+        if len(all_traces) == 0:
+            all_fingerprints =[]
+        else:
+            for i in range(len(current_inputs)):
+                fingerprint: List[FrozenSet[int]] = []
+                for j in range(len(TARGET_CONFIGS)):
+                    fingerprint.append(all_traces[j][i])
+                all_fingerprints.append(tuple(fingerprint))
 
-    # Extract their traces
-    trace_sets: List[FrozenSet[int]] = [
-        parse_tracer_output(proc.stdout.read())
-        if proc is not None and proc.stdout is not None
-        else frozenset()
-        for proc in traced_procs
-    ]
+    all_statuses: List[Tuple[int, ...]] = []
+    all_parse_trees: List[Tuple[ParseTree | None, ...]] = []
+    process_counter: int = 0
+    for current_input in current_inputs:
+        statuses: List[int] = []
+        parse_trees: List[ParseTree | None] = []
+        for tc in TARGET_CONFIGS:
+            proc = untraced_procs[process_counter]
+            process_counter += 1
+            status = proc.returncode if DIFFERENTIATE_NONZERO_EXIT_STATUSES else int(proc.returncode)
+            statuses.append(status)
+            parse_trees.append(
+                normalize(ParseTree(**{k: v.encode(tc.encoding) for k, v in json.loads(proc.stdout.read()).items()}))
+                if proc.stdout is not None and status == 0
+                else None
+            )
+        all_statuses.append(tuple(statuses))
+        all_parse_trees.append(tuple(parse_trees))
 
-    return tuple(trace_sets), statuses, tuple(parse_trees)
+    return all_fingerprints, all_statuses, all_parse_trees
 
 
 def main(minimized_differentials: List[bytes]) -> None:
@@ -279,7 +335,7 @@ def main(minimized_differentials: List[bytes]) -> None:
     # This is a fingerprint of the programs' execution on the input `I`.
     # Keep these fingerprints in a set.
     # An input is worth mutation if its fingerprint is new.
-    fingerprints: Set[fingerprint_t] = set()
+    seen_fingerprints: Set[fingerprint_t] = set()
 
     # This is the set of fingerprints that correspond with minimized differentials.
     # Whenever we minimize a differential into an input with a fingerprint not in this set,
@@ -295,19 +351,15 @@ def main(minimized_differentials: List[bytes]) -> None:
 
         with multiprocessing.Pool(processes=os.cpu_count()) as pool:
             # run the programs on the things in the input queue.
-            fingerprint_and_statuses_and_parse_trees = tqdm(
-                pool.imap(run_executables, input_queue),
-                desc="Running targets",
-                total=len(input_queue),
-            )
+            all_fingerprints, all_statuses, all_parse_trees = run_executables(input_queue)
 
-            for current_input, (fingerprint, statuses, parse_trees) in zip(
-                input_queue, fingerprint_and_statuses_and_parse_trees
+            for current_input, fingerprint, statuses, parse_trees in zip(
+                input_queue, all_fingerprints, all_statuses, all_parse_trees
             ):
                 # If we found something new, mutate it and add its children to the input queue
                 # If we get one program to fail while another succeeds, then we're doing good.
-                if fingerprint not in fingerprints:
-                    fingerprints.add(fingerprint)
+                if fingerprint not in seen_fingerprints:
+                    seen_fingerprints.add(fingerprint)
                     status_set: Set[int] = set(statuses)
                     if (len(status_set) != 1) or (
                         DETECT_OUTPUT_DIFFERENTIALS and status_set == {0} and len(set(parse_trees)) != 1
@@ -316,13 +368,20 @@ def main(minimized_differentials: List[bytes]) -> None:
                     else:
                         mutation_candidates.append(current_input)
 
-            minimized_inputs = tqdm(
+            minimized_inputs_tqdm = tqdm(
                 pool.imap(minimize_differential, differentials),
                 desc="Minimizing differentials",
                 total=len(differentials),
             )
+
+            minimized_inputs = list(minimized_inputs_tqdm)
+            generation_minimized_fingerprints = run_executables(minimized_inputs)[0] if len(minimized_inputs) > 0 else []
+
             for minimized_input in minimized_inputs:
-                minimized_fingerprint, _, _ = run_executables(minimized_input)
+                print(minimized_input)
+            for minimized_fingerprint, minimized_input in zip(
+                generation_minimized_fingerprints, minimized_inputs
+            ):
                 if minimized_fingerprint not in minimized_fingerprints:
                     minimized_differentials.append(minimized_input)
                     minimized_fingerprints.add(minimized_fingerprint)

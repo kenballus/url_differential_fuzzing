@@ -159,7 +159,7 @@ grammar_dict: Dict[str, str] = {
 }
 
 # Takes a regex and returns a random string matching that regex
-from hypothesis.strategies import from_regex
+from hypothesis.strategies import from_regex  # type: ignore
 import warnings
 
 
