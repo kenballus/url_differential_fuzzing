@@ -181,12 +181,9 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
         i: int = len(result) - deletion_length
         while i >= 0:
             reduced_form: bytes = result[:i] + result[i + deletion_length :]
-            # print("1 : " + str(orig_statuses))
             _ , list_new_statuses, list_new_parse_trees = run_executables([reduced_form], disable_tracing=True)
             new_statuses = list_new_statuses[0]
             new_parse_trees = list_new_parse_trees[0]
-            # print("2 : " + str(orig_statuses))
-            # print(str(new_statuses) + "vs" + str(orig_statuses))
             if (
                 new_statuses == orig_statuses
                 and (
@@ -196,16 +193,13 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
                 )
                 == orig_parse_tree_comparisons
             ):
-                # print(new_statuses is orig_statuses)
                 result = reduced_form
-                # print(result)
                 i -= deletion_length
             else:
                 i -= 1
-    print(result)
     return result
 
-@functools.lru_cache # TODO: Fix up memoization?
+# @functools.lru_cache # TODO: Fix up memoization?
 def run_executables(current_inputs: List[bytes], disable_tracing: bool = False) -> Tuple[
                                                                                         List[fingerprint_t],
                                                                                         List[Tuple[int, ...]],
@@ -268,34 +262,18 @@ def run_executables(current_inputs: List[bytes], disable_tracing: bool = False) 
         if proc is not None:
             proc.wait()
 
-    all_fingerprints: List[Tuple[FrozenSet[int], ...]] = []
+    all_fingerprints: List[fingerprint_t] = []
     if not disable_tracing:
-        all_traces: List[List[FrozenSet[int]]] = []
-        # Collect Fingerprints TODO: Clean this up
-        for proc, i in zip(traced_procs, range(len(traced_procs))):
-            if proc is not None:
-                traces: List[FrozenSet[int]] = []
-                output_dir = TRACE_DIR.joinpath(str(i))
-                for i in range(len(current_inputs)):
-                    output_filename = output_dir.joinpath(str(i))
-                    if os.path.isfile(output_filename):
-                        with open(output_filename, "rb") as trace_file:
-                            traces.append(parse_tracer_output(trace_file.read()))
-                    else:  # Empty Input
-                        traces.append(frozenset())
-                all_traces.append(traces)
-            else:
-                all_traces.append([])
-
-        # Convert output into the format we want TODO: Check if necessary
-        if len(all_traces) == 0:
-            all_fingerprints =[]
-        else:
-            for i in range(len(current_inputs)):
-                fingerprint: List[FrozenSet[int]] = []
-                for j in range(len(TARGET_CONFIGS)):
-                    fingerprint.append(all_traces[j][i])
-                all_fingerprints.append(tuple(fingerprint))
+        for file_counter in range(len(current_inputs)):
+            fingerprint: List[FrozenSet[int]] = []
+            for target_num in range(len(TARGET_CONFIGS)):
+                output_filename = TRACE_DIR.joinpath(str(target_num)).joinpath(str(file_counter))
+                if os.path.isfile(output_filename):
+                    with open(output_filename, "rb") as trace_file:
+                        fingerprint.append(parse_tracer_output(trace_file.read()))
+                else:  # Empty Input results in no file
+                    fingerprint.append(frozenset())
+            all_fingerprints.append(tuple(fingerprint))
 
     all_statuses: List[Tuple[int, ...]] = []
     all_parse_trees: List[Tuple[ParseTree | None, ...]] = []
@@ -350,7 +328,7 @@ def main(minimized_differentials: List[bytes]) -> None:
         differentials: List[bytes] = []
 
         with multiprocessing.Pool(processes=os.cpu_count()) as pool:
-            # run the programs on the things in the input queue.
+            # run the programs on the things in the input queue. TODO: Make this into a batch
             all_fingerprints, all_statuses, all_parse_trees = run_executables(input_queue)
 
             for current_input, fingerprint, statuses, parse_trees in zip(
@@ -375,10 +353,9 @@ def main(minimized_differentials: List[bytes]) -> None:
             )
 
             minimized_inputs = list(minimized_inputs_tqdm)
+            # TODO: Make this into a batch?
             generation_minimized_fingerprints = run_executables(minimized_inputs)[0] if len(minimized_inputs) > 0 else []
 
-            for minimized_input in minimized_inputs:
-                print(minimized_input)
             for minimized_fingerprint, minimized_input in zip(
                 generation_minimized_fingerprints, minimized_inputs
             ):
