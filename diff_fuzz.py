@@ -15,6 +15,7 @@ import itertools
 import os
 import re
 import json
+import shutil
 from dataclasses import fields
 from pathlib import PosixPath
 from typing import List, Set, FrozenSet, Tuple, Callable, Any
@@ -36,8 +37,7 @@ from config import (
     DELETION_LENGTHS,
     RESULTS_DIR,
     USE_GRAMMAR_MUTATIONS,
-    GENERATION_DIR,
-    TRACE_DIR,
+    EXECUTION_DIR
 )
 
 if USE_GRAMMAR_MUTATIONS:
@@ -59,10 +59,6 @@ assert SEED_DIR.is_dir()
 SEED_INPUTS: List[PosixPath] = list(map(lambda s: SEED_DIR.joinpath(PosixPath(s)), os.listdir(SEED_DIR)))
 
 assert RESULTS_DIR.is_dir()
-
-assert GENERATION_DIR.is_dir()
-
-assert TRACE_DIR.is_dir()
 
 assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 
@@ -128,9 +124,9 @@ def parse_tracer_output(tracer_output: bytes) -> FrozenSet[int]:
     return frozenset(result)
 
 
-def make_command_line(tc: TargetConfig, input_dir: PosixPath, output_dir: PosixPath) -> List[str]:
+def make_command_line(tc: TargetConfig, input_dir: PosixPath | None=None, output_dir: PosixPath | None=None) -> List[str]:
     command_line: List[str] = []
-    if tc.needs_tracing:
+    if tc.needs_tracing and input_dir is not None and output_dir is not None:
         if tc.needs_python_afl:
             command_line.append("py-afl-showmap")
         else:
@@ -205,28 +201,29 @@ def run_executables(current_inputs: List[bytes], disable_tracing: bool = False) 
                                                                                         List[Tuple[int, ...]],
                                                                                         List[Tuple[ParseTree | None, ...]]]:
 
+    # Create directory to run showmap, save it for later
+    exec_dir = EXECUTION_DIR.joinpath(str(uuid.uuid4()))
+
     traced_procs: List[subprocess.Popen | None] = []
 
     if not disable_tracing:
-        # Clear the needed directories
-        for f in os.listdir(GENERATION_DIR):
-            os.remove(os.path.join(GENERATION_DIR, f))
-        for f in os.listdir(TRACE_DIR):
-            second_dir = os.path.join(TRACE_DIR, f)
-            for f2 in os.listdir(second_dir):
-                os.remove(os.path.join(second_dir, f2))
-            os.rmdir(os.path.join(TRACE_DIR, f))
+        # Create sub directories
+        os.mkdir(exec_dir)
+        gen_dir = exec_dir.joinpath("generation")
+        os.mkdir(gen_dir)
+        trace_dir = exec_dir.joinpath("trace")
+        os.mkdir(trace_dir)
 
         # Write the inputs into files
         for current_input, i in zip(current_inputs, range(len(current_inputs))):
-            with open(GENERATION_DIR.joinpath(str(i)), "wb") as input_file:
+            with open(gen_dir.joinpath(str(i)), "wb") as input_file:
                 input_file.write(current_input)
 
         for tc, i in zip(TARGET_CONFIGS, range(len(TARGET_CONFIGS))):
             # Create an output folder
-            output_dir = TRACE_DIR.joinpath(str(i))
+            output_dir = trace_dir.joinpath(str(i))
             os.mkdir(output_dir)
-            command_line: List[str] = make_command_line(tc, GENERATION_DIR, output_dir)
+            command_line: List[str] = make_command_line(tc, gen_dir, output_dir)
             if not disable_tracing and tc.needs_tracing:
                 traced_proc: subprocess.Popen = subprocess.Popen(
                     command_line,
@@ -243,8 +240,7 @@ def run_executables(current_inputs: List[bytes], disable_tracing: bool = False) 
     untraced_procs: List[subprocess.Popen] = []
     for current_input in current_inputs:
         for tc in TARGET_CONFIGS:
-            full_command_line: List[str] = make_command_line(tc, GENERATION_DIR, TRACE_DIR)
-            untraced_command_line: List[str] = full_command_line[full_command_line.index("--") + 1 :]
+            untraced_command_line: List[str] = make_command_line(tc, None, None)
             untraced_proc: subprocess.Popen = subprocess.Popen(
                 untraced_command_line,
                 stdin=subprocess.PIPE,
@@ -264,16 +260,19 @@ def run_executables(current_inputs: List[bytes], disable_tracing: bool = False) 
 
     all_fingerprints: List[fingerprint_t] = []
     if not disable_tracing:
+        trace_dir = exec_dir.joinpath("trace")
         for file_counter in range(len(current_inputs)):
             fingerprint: List[FrozenSet[int]] = []
             for target_num in range(len(TARGET_CONFIGS)):
-                output_filename = TRACE_DIR.joinpath(str(target_num)).joinpath(str(file_counter))
+                output_filename = trace_dir.joinpath(str(target_num)).joinpath(str(file_counter))
                 if os.path.isfile(output_filename):
                     with open(output_filename, "rb") as trace_file:
                         fingerprint.append(parse_tracer_output(trace_file.read()))
                 else:  # Empty Input results in no file
                     fingerprint.append(frozenset())
             all_fingerprints.append(tuple(fingerprint))
+        # Clean up
+        shutil.rmtree(exec_dir)
 
     all_statuses: List[Tuple[int, ...]] = []
     all_parse_trees: List[Tuple[ParseTree | None, ...]] = []
@@ -294,13 +293,19 @@ def run_executables(current_inputs: List[bytes], disable_tracing: bool = False) 
         all_statuses.append(tuple(statuses))
         all_parse_trees.append(tuple(parse_trees))
 
-    return all_fingerprints, all_statuses, all_parse_trees
+    return all_fingerprints, all_statuses, all_parse_trees # TODO: Make this return a list of tuples instead of a tuple of lists
 
 
 def main(minimized_differentials: List[bytes]) -> None:
     # We take minimized_differentials as an argument because we want
     # it to persist even if this function has an uncaught exception.
     assert len(minimized_differentials) == 0
+
+    # Clear out the execution directory
+    if os.path.exists(EXECUTION_DIR):
+        shutil.rmtree(EXECUTION_DIR)
+
+    os.mkdir(EXECUTION_DIR)
 
     input_queue: List[bytes] = []
     for seed_input in SEED_INPUTS:
@@ -327,9 +332,35 @@ def main(minimized_differentials: List[bytes]) -> None:
         mutation_candidates: List[bytes] = []
         differentials: List[bytes] = []
 
-        with multiprocessing.Pool(processes=os.cpu_count()) as pool:
-            # run the programs on the things in the input queue. TODO: Make this into a batch
-            all_fingerprints, all_statuses, all_parse_trees = run_executables(input_queue)
+        with multiprocessing.Pool(os.cpu_count()) as pool:
+
+            # run the programs on the things in the input queue.
+            input_queue_pos: int = 0
+            batches: List[List[bytes]] = []
+            num_cpus: int|None = os.cpu_count()
+            assert num_cpus is not None
+            for cpu in range(num_cpus):
+                batch: List[bytes] = []
+                for _ in range(len(input_queue) // num_cpus + 1):
+                    if input_queue_pos >= len(input_queue):
+                        break
+                    batch.append(input_queue[input_queue_pos])
+                    input_queue_pos += 1
+                batches.append(batch)
+            
+
+            batch_executions = tqdm(
+                pool.imap(run_executables, batches),
+                desc="Minimizing differentials",
+                total=len(differentials),
+            )
+
+            all_fingerprints, all_statuses, all_parse_trees = ([], [], [])
+            for executions in batch_executions:
+                execution_fingerprints, execution_statuses, execution_parse_trees = executions
+                all_fingerprints.extend(execution_fingerprints)
+                all_statuses.extend(execution_statuses)
+                all_parse_trees.extend(execution_parse_trees)
 
             for current_input, fingerprint, statuses, parse_trees in zip(
                 input_queue, all_fingerprints, all_statuses, all_parse_trees
@@ -386,6 +417,9 @@ if __name__ == "__main__":
         main(final_results)
     except KeyboardInterrupt:
         pass
+
+    # Clean up interrupted files
+    shutil.rmtree(EXECUTION_DIR)
 
     if len(final_results) != 0:
         print("Differentials:", file=sys.stderr)

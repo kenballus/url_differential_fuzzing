@@ -19,8 +19,7 @@ SEED_DIR: PosixPath = PosixPath("./seeds")
 RESULTS_DIR: PosixPath = PosixPath("./results")
 
 # The directory the fuzzer saves inputs into
-GENERATION_DIR: PosixPath = PosixPath("./generation")
-TRACE_DIR: PosixPath = PosixPath("./traces")
+EXECUTION_DIR: PosixPath = PosixPath("./execution")
 
 # Time in milliseconds given to each process
 TIMEOUT_TIME: int = 10000
