@@ -1,7 +1,8 @@
 hyperlink:
 	git clone "https://github.com/python-hyper/hyperlink"
-	pip install ./hyperlink
+	pip3 install ./hyperlink
+	rm -rf ./hyperlink
 
 .PHONY: clean
 clean:
-	rm -rf hyperlink
+	pip3 uninstall hyperlink
