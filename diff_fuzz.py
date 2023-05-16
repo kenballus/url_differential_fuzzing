@@ -47,12 +47,6 @@ if USE_GRAMMAR_MUTATIONS:
         )
         sys.exit(1)
 
-try:
-    from normalization import normalize  # type: ignore
-except ModuleNotFoundError:
-    print("`normalization.py` not found; disabling normalizers.", file=sys.stderr)
-    normalize = lambda x: x  # type: ignore
-
 assert SEED_DIR.is_dir()
 SEED_INPUTS: List[PosixPath] = list(map(lambda s: SEED_DIR.joinpath(PosixPath(s)), os.listdir(SEED_DIR)))
 
@@ -247,10 +241,8 @@ def run_executables(
 
     # Extract their parse trees
     parse_trees: List[ParseTree | None] = [
-        normalize(ParseTree(**{k: v.encode(tc.encoding) for k, v in json.loads(proc.stdout.read()).items()}))
-        if proc.stdout is not None and status == 0
-        else None
-        for proc, status, tc in zip(untraced_procs, statuses, TARGET_CONFIGS)
+        ParseTree(**json.loads(proc.stdout.read())) if proc.stdout is not None and status == 0 else None
+        for proc, status in zip(untraced_procs, statuses)
     ]
 
     # Extract their traces
