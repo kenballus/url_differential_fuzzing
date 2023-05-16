@@ -1,12 +1,12 @@
 CXX := afl-clang-fast++
 CXXFLAGS := -Weverything -Wno-c++98-compat -Os
-IFLAGS := -Iboost/libs/url/include -Iboost/libs/beast/include -Iboost/libs/config/include
+IFLAGS := -Iboost
 
-boost_url_target: boost_url_target.cpp boost
+boost_url_target: boost_url_target.cpp boost/boost
 	$(CXX) $(IFLAGS) $(CXXFLAGS) boost_url_target.cpp -o boost_url_target
 
-boost:
-	git clone --recurse-submodules https://github.com/boostorg/boost.git
+boost/boost: get_boost.sh
+	./get_boost.sh
 
 .PHONY: clean
 clean:
