@@ -3,14 +3,13 @@ import io
 
 from diff_fuzz import run_executables
 from config import TARGET_CONFIGS
-from normalization import normalize
 
 def main(input_file: io.BufferedReader) -> None:
-    fingerprint, statuses, parse_trees = run_executables(input_file.read())
-    for tc, status, parse_tree in zip(TARGET_CONFIGS, statuses, parse_trees):
+    fingerprint, _, parse_trees = run_executables(input_file.read())
+    for tc, parse_tree in zip(TARGET_CONFIGS, parse_trees):
         print(tc.executable)
-        print(status)
         print(parse_tree)
+        print()
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
