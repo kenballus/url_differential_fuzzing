@@ -23,7 +23,7 @@ TIMEOUT_TIME: int = 10000
 
 # Set this to False if you only care about exit status differentials
 # (i.e. the programs you're testing aren't expected to have identical output on stdout)
-DETECT_OUTPUT_DIFFERENTIALS: bool = False
+DETECT_OUTPUT_DIFFERENTIALS: bool = True
 
 # Set this to True if you want to use grammar mutations.
 # (Requires a grammar.py with the appropriate interface)
@@ -84,6 +84,27 @@ class TargetConfig:
 # Configuration for each fuzzing target
 TARGET_CONFIGS: List[TargetConfig] = [
     TargetConfig(
+        executable=PosixPath("./targets/boost_url/boost_url_target"),
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/curl/curl_target"),
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/furl/furl_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/hyperlink/hyperlink_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/libwget/libwget_target"),
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/rfc3986/rfc3986_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
         executable=PosixPath("./targets/urllib/urllib_target"),
         needs_python_afl=True,
     ),
@@ -92,28 +113,7 @@ TARGET_CONFIGS: List[TargetConfig] = [
         needs_python_afl=True,
     ),
     TargetConfig(
-        executable=PosixPath("./targets/furl/furl_target"),
-        needs_python_afl=True,
-    ),
-    TargetConfig(
         executable=PosixPath("./targets/yarl/yarl_target"),
         needs_python_afl=True,
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/rfc3986/rfc3986_target"),
-        needs_python_afl=True,
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/hyperlink/hyperlink_target"),
-        needs_python_afl=True,
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/curl/curl_target"),
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/libwget/libwget_target"),
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/boost_url/boost_url_target"),
     ),
 ]

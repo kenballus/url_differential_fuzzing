@@ -13,7 +13,7 @@ def main():
     result["scheme"] = parsed_url.scheme
     result["userinfo"] = (parsed_url.username if parsed_url.username is not None else "") + (f":{parsed_url.password}" if parsed_url.password is not None else "")
     result["host"] = parsed_url.hostname
-    result["port"] = str(parsed_url.port)
+    result["port"] = str(parsed_url.port) if parsed_url.port is not None else ""
     result["path"] = parsed_url.path + ((';' + parsed_url.params) if parsed_url.params else "")
     result["query"] = parsed_url.query
     result["fragment"] = parsed_url.fragment

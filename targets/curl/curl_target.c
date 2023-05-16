@@ -49,7 +49,8 @@ int main(void) {
         Curl_base64_encode(scheme, 0, &b64_scheme, &unused);
     }
     if (user != NULL && password != NULL) {
-        if (realloc(user, strlen(user) + 1 + strlen(password) + 1) != 0) {
+        user = realloc(user, strlen(user) + 1 + strlen(password) + 1);
+        if (user == NULL) {
             return 2;
         }
         strcat(user, ":");
@@ -58,12 +59,18 @@ int main(void) {
     } else if (user != NULL && password == NULL) {
         Curl_base64_encode(user, 0, &b64_userinfo, &unused);
     } else if (user == NULL && password != NULL) {
-        char userinfo[] = {':', '\0'};
-        if (realloc(userinfo, 1 + strlen(password) + 1) != 0) {
+        user = malloc(2);
+        if (user == NULL) {
             return 2;
         }
-        strcat(userinfo, password);
-        Curl_base64_encode(userinfo, 0, &b64_userinfo, &unused);
+        user[0] = ':';
+        user[1] = '\0';
+        user = realloc(user, 1 + strlen(password) + 1);
+        if (user == NULL) {
+            return 2;
+        }
+        strcat(user, password);
+        Curl_base64_encode(user, 0, &b64_userinfo, &unused);
     }
     if (host != NULL) {
         Curl_base64_encode(host, 0, &b64_host, &unused);

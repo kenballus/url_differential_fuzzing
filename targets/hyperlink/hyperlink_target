@@ -13,7 +13,7 @@ def main():
     result["scheme"] = parsed_url.scheme
     result["userinfo"] = parsed_url.userinfo
     result["host"] = parsed_url.host
-    result["port"] = str(parsed_url.port)
+    result["port"] = str(parsed_url.port) if parsed_url.port is not None else ""
     result["path"] = ("/" if parsed_url.rooted else "") + "/".join(parsed_url.path)
     result["query"] = "&".join(p[0] + (f"={p[1]}" if p[1] is not None else "") for p in parsed_url.query)
     result["fragment"] = parsed_url.fragment

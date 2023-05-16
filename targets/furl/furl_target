@@ -11,9 +11,9 @@ def main():
 
     result = {}
     result["scheme"] = parsed_url.scheme
-    result["userinfo"] = parsed_url.username + (f":{parsed_url.password}" if parsed_url.password is not None else "")
+    result["userinfo"] = (f":{parsed_url.username}" if parsed_url.username is not None else "") + (f":{parsed_url.password}" if parsed_url.password is not None else "")
     result["host"] = parsed_url.host
-    result["port"] = str(parsed_url.port)
+    result["port"] = str(parsed_url.port) if parsed_url.port is not None else ""
     result["path"] = str(parsed_url.path)
     result["query"] = str(parsed_url.query)
     result["fragment"] = str(parsed_url.fragment)
