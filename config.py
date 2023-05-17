@@ -5,7 +5,7 @@
 #############################################################################################
 
 from pathlib import PosixPath
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from dataclasses import dataclass, field
 from os import environ
 
@@ -26,7 +26,7 @@ TIMEOUT_TIME: int = 10000
 
 # Set this to False if you only care about exit status differentials
 # (i.e. the programs you're testing aren't expected to have identical output on stdout)
-DETECT_OUTPUT_DIFFERENTIALS: bool = False
+DETECT_OUTPUT_DIFFERENTIALS: bool = True
 
 # Set this to True if you want to use grammar mutations.
 # (Requires a grammar.py with the appropriate interface)
@@ -60,6 +60,22 @@ class ParseTree:
     fragment: bytes
 
 
+# This is the comparison operation on optional parse trees.
+# During minimization, the result of the function is preserved.
+# If your programs' output is expected to match completely, then leave this as-is.
+# Otherwise, rewrite it to implement an equivalence operation between your parse trees.
+def compare_parse_trees(t1: ParseTree | None, t2: ParseTree | None) -> Tuple[bool, ...]:
+    return (t1 is t2,) if t1 is None or t2 is None else (
+        t1.scheme == t2.scheme,
+        t1.host == t2.host,
+        t1.path == t2.path or all(path in (b"", b"/") for path in (t1.path, t2.path)),
+        t1.port == t2.port,
+        t1.query == t2.query,
+        t1.userinfo == t2.userinfo,
+        t1.fragment == t2.fragment,
+    )
+
+
 # This is the configuration class for each target program.
 @dataclass(frozen=True)
 class TargetConfig:
@@ -79,44 +95,41 @@ class TargetConfig:
     needs_python_afl: bool = False
     # The environment variables to pass to the executable
     env: Dict[str, str] = field(default_factory=lambda: dict(environ))
-    # The character encoding that this program uses for its output
-    # (useful for normalization)
-    encoding: str = "UTF-8"
 
 
 # Configuration for each fuzzing target
 TARGET_CONFIGS: List[TargetConfig] = [
     TargetConfig(
-        executable=PosixPath("./targets/urllib_target.py"),
-        needs_python_afl=True,
+        executable=PosixPath("./targets/boost_url/boost_url_target"),
     ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/urllib3_target.py"),
-    #     needs_python_afl=True,
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/furl_target.py"),
-    #     needs_python_afl=True,
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/yarl_target.py"),
-    #     needs_python_afl=True,
-    # ),
     TargetConfig(
-        executable=PosixPath("./targets/rfc3986_target.py"),
+        executable=PosixPath("./targets/curl/curl_target"),
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/furl/furl_target"),
         needs_python_afl=True,
     ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/hyperlink_target.py"),
-    #     needs_python_afl=True,
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/curl/curl_target"),
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/libwget/libwget_target"),
-    # ),
-    # TargetConfig(
-    #     executable=PosixPath("./targets/boost_url/boost_url_target"),
-    # ),
+    TargetConfig(
+        executable=PosixPath("./targets/hyperlink/hyperlink_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/libwget/libwget_target"),
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/rfc3986/rfc3986_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/urllib/urllib_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/urllib3/urllib3_target"),
+        needs_python_afl=True,
+    ),
+    TargetConfig(
+        executable=PosixPath("./targets/yarl/yarl_target"),
+        needs_python_afl=True,
+    ),
 ]

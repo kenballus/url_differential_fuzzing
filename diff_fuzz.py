@@ -27,6 +27,7 @@ except ModuleNotFoundError:
 
 from config import (
     ParseTree,
+    compare_parse_trees,
     TargetConfig,
     TIMEOUT_TIME,
     TARGET_CONFIGS,
@@ -48,12 +49,6 @@ if USE_GRAMMAR_MUTATIONS:
             "`grammar.py` not found. Either make one or set USE_GRAMMAR_MUTATIONS to False", file=sys.stderr
         )
         sys.exit(1)
-
-try:
-    from normalization import normalize  # type: ignore
-except ModuleNotFoundError:
-    print("`normalization.py` not found; disabling normalizers.", file=sys.stderr)
-    normalize = lambda x: x  # type: ignore
 
 assert SEED_DIR.is_dir()
 SEED_INPUTS: List[PosixPath] = list(map(lambda s: SEED_DIR.joinpath(PosixPath(s)), os.listdir(SEED_DIR)))
@@ -135,6 +130,7 @@ def make_command_line(tc: TargetConfig, input_dir: PosixPath | None=None, output
                 command_line.append("-Q")
         command_line += ["-i", str(input_dir.resolve())]
         command_line += ["-o", str(output_dir.resolve())]
+        command_line.append("-q")  # Don't care about traced program stdout
         command_line.append("-e")  # Only care about edge coverage; ignore hit counts
         command_line += ["-t", str(TIMEOUT_TIME)]
         command_line.append("--")
@@ -147,25 +143,13 @@ def make_command_line(tc: TargetConfig, input_dir: PosixPath | None=None, output
     return command_line
 
 
-def field_cmp(t1: ParseTree | None, t2: ParseTree | None) -> Tuple[bool, ...]:
-    return (
-        (True,)
-        if t1 is t2 is None
-        else (
-            (False,)
-            if t1 is None or t2 is None
-            else tuple(getattr(t1, field.name) == getattr(t2, field.name) for field in fields(ParseTree))
-        )
-    )
-
-
 def minimize_differential(bug_inducing_input: bytes) -> bytes:
     orig_outputs = run_executables((bug_inducing_input,), disable_tracing=True)
     _, orig_statuses, orig_parse_trees = orig_outputs[0]
     needs_parse_tree_comparison: bool = len(set(orig_statuses)) == 1
 
     orig_parse_tree_comparisons: List[Tuple[bool, ...]] = (
-        list(itertools.starmap(field_cmp, itertools.combinations(orig_parse_trees, 2)))
+        list(itertools.starmap(compare_parse_trees, itertools.combinations(orig_parse_trees, 2)))
         if needs_parse_tree_comparison
         else [(True,)]
     )
@@ -181,7 +165,7 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
             if (
                 new_statuses == orig_statuses
                 and (
-                    list(itertools.starmap(field_cmp, itertools.combinations(new_parse_trees, 2)))
+                    list(itertools.starmap(compare_parse_trees, itertools.combinations(new_parse_trees, 2)))
                     if needs_parse_tree_comparison
                     else [(True,)]
                 )

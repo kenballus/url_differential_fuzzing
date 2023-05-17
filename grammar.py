@@ -1,8 +1,12 @@
 # grammar.py
 # This is a big regex that should completely match RFC3986.
 
-from typing import Dict, Union, List, Tuple
 import re
+import warnings
+from typing import Dict
+
+from hypothesis.strategies import from_regex  # type: ignore
+
 
 # A grammar maps rule names either a string or a sequence of rule names
 # A terminal always maps to a regex
@@ -63,7 +67,7 @@ USERINFO_RE: re.Pattern = re.compile(USERINFO_PAT)
 #           / "1" 2DIGIT            ; 100-199
 #           / "2" %x30-34 DIGIT     ; 200-249
 #           / "25" %x30-35          ; 250-255
-DEC_OCTET_PAT: str = rf"(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])"
+DEC_OCTET_PAT: str = r"(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])"
 
 # IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
 IPV4ADDRESS_PAT: str = rf"({DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT})"
@@ -162,23 +166,7 @@ grammar_dict: Dict[str, str] = {
 from hypothesis.strategies import from_regex  # type: ignore
 import warnings
 
-
 def generate_random_matching_input(pattern: str) -> str:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return from_regex(r"\A" + pattern + r"\Z").example()
-
-
-# if __name__ == "__main__":
-#     import rfc3986, urllib3, urllib.parse, furl, yarl, hyperlink
-#     parsers = [rfc3986.urlparse, urllib3.util.parse_url, urllib.parse.urlparse, furl.furl, yarl.URL, hyperlink.URL.from_text]
-#     urls = iter(lambda: generate_random_matching_input(URI_PAT), 0)
-
-#     done = False
-#     for url in urls:
-#         for parser in parsers:
-#             try:
-#                 parser(url)
-#             except:
-#                 print("URL:", repr(url))
-#                 import pdb; pdb.set_trace()
