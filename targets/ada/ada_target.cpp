@@ -1,7 +1,7 @@
 #include <iostream>
-
-#include <boost/url/src.hpp>
 #include <boost/beast.hpp>
+
+#include "ada/singleheader/ada.h"
 
 using boost::beast::detail::base64::encode;
 using boost::beast::detail::base64::encoded_size;
@@ -13,15 +13,27 @@ int main() {
         input += line;
     }
 
-    boost::urls::url const u(input);
+    auto const &parsed_url = ada::parse<ada::url_aggregator>(input);
+    if (!parsed_url) {
+        return 1;
+    }
 
-    std::string const scheme(u.scheme());
-    std::string const userinfo(u.userinfo());
-    std::string const host(u.host());
-    std::string const port(u.port());
-    std::string const path(u.path());
-    std::string const query(u.query());
-    std::string const fragment(u.fragment());
+    std::string scheme(parsed_url->get_protocol());
+    if (scheme.back() == ':') {
+        scheme.pop_back();
+    }
+    std::string userinfo(std::string(parsed_url->get_username()) + (parsed_url->has_password() ? (std::string(":") + std::string(parsed_url->get_password())) : std::string()));
+    std::string host(parsed_url->get_hostname());
+    std::string port(parsed_url->get_port());
+    std::string path(parsed_url->get_pathname());
+    std::string query(parsed_url->get_search());
+    if (query[0] == '?') {
+        query = query.substr(1);
+    }
+    std::string fragment(parsed_url->get_hash());
+    if (fragment[0] == '#') {
+        fragment = fragment.substr(1);
+    }
 
     char *const scheme_b64 = new char[encoded_size(scheme.length()) + 1];
     char *const userinfo_b64 = new char[encoded_size(userinfo.length()) + 1];

@@ -1,5 +1,5 @@
 CXX := afl-clang-fast++
-CXXFLAGS := -Weverything -Wno-c++98-compat -Os
+CXXFLAGS := -Wall -Wextra -Os
 IFLAGS := -Iboost
 
 boost_url_target: boost_url_target.cpp boost/boost
