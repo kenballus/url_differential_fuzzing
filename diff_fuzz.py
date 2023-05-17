@@ -147,7 +147,7 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
     orig_outputs = run_executables((bug_inducing_input,), disable_tracing=True)
     _, orig_statuses, orig_parse_trees = orig_outputs[0]
     needs_parse_tree_comparison: bool = len(set(orig_statuses)) == 1
-
+    
     orig_parse_tree_comparisons: List[Tuple[bool, ...]] = (
         list(itertools.starmap(compare_parse_trees, itertools.combinations(orig_parse_trees, 2)))
         if needs_parse_tree_comparison
@@ -178,7 +178,7 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
     return result
 
 @functools.lru_cache
-def run_executables(current_inputs: Tuple[bytes], disable_tracing: bool = False) -> List[Tuple[fingerprint_t,Tuple[int, ...],Tuple[ParseTree | None, ...]]]:
+def run_executables(current_inputs: Tuple[bytes], disable_tracing: bool = False, only_recorded_traces: bool = False) -> List[Tuple[fingerprint_t,Tuple[int, ...],Tuple[ParseTree | None, ...]]]:
 
     # Create directory to run showmap, save it for later
     exec_dir = EXECUTION_DIR.joinpath(str(uuid.uuid4()))
@@ -251,7 +251,7 @@ def run_executables(current_inputs: Tuple[bytes], disable_tracing: bool = False)
             proc = untraced_procs[process_counter]
             process_counter += 1
             # Recover statuses and parse trees
-            if proc is not None:
+            if tc.record_differentials:
                 status = proc.returncode if DIFFERENTIATE_NONZERO_EXIT_STATUSES else int(proc.returncode)
                 statuses.append(status)
                 parse_trees.append(
@@ -263,7 +263,7 @@ def run_executables(current_inputs: Tuple[bytes], disable_tracing: bool = False)
             if not disable_tracing:
                 # Recover fingerprint
                 output_filename = trace_dir.joinpath(str(target_num)).joinpath(str(file_counter))
-                if os.path.isfile(output_filename):
+                if os.path.isfile(output_filename) and (tc.record_differentials == True or not only_recorded_traces):
                     with open(output_filename, "rb") as trace_file:
                         traces.append(parse_tracer_output(trace_file.read()))
                 else:  # Empty Input results in no file
@@ -365,7 +365,7 @@ def main(minimized_differentials: List[bytes]) -> None:
             minimized_inputs = tuple(minimized_inputs_tqdm)
 
         # TODO: Multiprocess this?
-        minimized_outputs = run_executables(minimized_inputs)
+        minimized_outputs = run_executables(minimized_inputs, only_recorded_traces=True)
 
         for (minimized_fingerprint, _, _), minimized_input in zip(
             minimized_outputs, minimized_inputs
