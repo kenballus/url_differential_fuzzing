@@ -343,7 +343,7 @@ def main(minimized_differentials: List[bytes]) -> None:
 
             batch_executions = tqdm(
                 pool.imap(run_executables, batches),
-                desc="Minimizing differentials",
+                desc="Running Targets",
                 total=len(differentials),
             )
 
@@ -370,7 +370,7 @@ def main(minimized_differentials: List[bytes]) -> None:
 
             minimized_inputs_tqdm = tqdm(
                 pool.imap(minimize_differential, differentials),
-                desc="Minimizing differentials",
+                desc="Minimizing Differentials",
                 total=len(differentials),
             )
 
