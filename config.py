@@ -99,12 +99,12 @@ class TargetConfig:
 
 # Configuration for each fuzzing target
 TARGET_CONFIGS: List[TargetConfig] = [
-    TargetConfig(
-        executable=PosixPath("./targets/boost_url/boost_url_target"),
-    ),
-    TargetConfig(
-        executable=PosixPath("./targets/curl/curl_target"),
-    ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/boost_url/boost_url_target"),
+    # ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/curl/curl_target"),
+    # ),
     TargetConfig(
         executable=PosixPath("./targets/furl/furl_target"),
         needs_python_afl=True,
@@ -113,9 +113,9 @@ TARGET_CONFIGS: List[TargetConfig] = [
         executable=PosixPath("./targets/hyperlink/hyperlink_target"),
         needs_python_afl=True,
     ),
-    TargetConfig(
-        executable=PosixPath("./targets/libwget/libwget_target"),
-    ),
+    # TargetConfig(
+    #     executable=PosixPath("./targets/libwget/libwget_target"),
+    # ),
     TargetConfig(
         executable=PosixPath("./targets/rfc3986/rfc3986_target"),
         needs_python_afl=True,

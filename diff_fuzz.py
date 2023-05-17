@@ -251,7 +251,7 @@ def run_executables(current_inputs: Tuple[bytes], disable_tracing: bool = False)
             status = proc.returncode if DIFFERENTIATE_NONZERO_EXIT_STATUSES else int(proc.returncode)
             statuses.append(status)
             parse_trees.append(
-                normalize(ParseTree(**{k: v.encode(tc.encoding) for k, v in json.loads(proc.stdout.read()).items()}))
+                ParseTree(**{k: v for k, v in json.loads(proc.stdout.read()).items()})
                 if proc.stdout is not None and status == 0
                 else None
             )
