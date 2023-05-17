@@ -1,0 +1,6 @@
+Experiments
+
+URLLIB3 vs YARL running 1 generation of 10,000 inputs
+Without Forkserver Optimizations: 4:46
+With Forkserver Optimizations: 2:13
+Removing Forkserver Optimizations results in 115% increase in time taken
