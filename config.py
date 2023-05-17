@@ -95,6 +95,8 @@ class TargetConfig:
     needs_python_afl: bool = False
     # The environment variables to pass to the executable
     env: Dict[str, str] = field(default_factory=lambda: dict(environ))
+    # Choose if we care about differentials involving this executable
+    record_differentials: bool = True
 
 
 # Configuration for each fuzzing target
@@ -108,10 +110,12 @@ TARGET_CONFIGS: List[TargetConfig] = [
     TargetConfig(
         executable=PosixPath("./targets/furl/furl_target"),
         needs_python_afl=True,
+        record_differentials=False,
     ),
     TargetConfig(
         executable=PosixPath("./targets/hyperlink/hyperlink_target"),
         needs_python_afl=True,
+        record_differentials=False,
     ),
     # TargetConfig(
     #     executable=PosixPath("./targets/libwget/libwget_target"),
@@ -127,9 +131,11 @@ TARGET_CONFIGS: List[TargetConfig] = [
     TargetConfig(
         executable=PosixPath("./targets/urllib3/urllib3_target"),
         needs_python_afl=True,
+        record_differentials=False,
     ),
     TargetConfig(
         executable=PosixPath("./targets/yarl/yarl_target"),
         needs_python_afl=True,
+        record_differentials=False,
     ),
 ]

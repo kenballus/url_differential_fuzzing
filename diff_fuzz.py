@@ -203,7 +203,7 @@ def run_executables(current_inputs: Tuple[bytes], disable_tracing: bool = False)
             output_dir = trace_dir.joinpath(str(i))
             os.mkdir(output_dir)
             command_line: List[str] = make_command_line(tc, gen_dir, output_dir)
-            if not disable_tracing and tc.needs_tracing:
+            if tc.needs_tracing:
                 traced_proc: subprocess.Popen = subprocess.Popen(
                     command_line,
                     stdin=subprocess.DEVNULL,
@@ -216,21 +216,24 @@ def run_executables(current_inputs: Tuple[bytes], disable_tracing: bool = False)
                 traced_procs.append(None)
 
     # We need these to extract exit statuses and parse_trees
-    untraced_procs: List[subprocess.Popen] = []
+    untraced_procs: List[subprocess.Popen | None] = []
     for current_input in current_inputs:
         for tc in TARGET_CONFIGS:
-            untraced_command_line: List[str] = make_command_line(tc, None, None)
-            untraced_proc: subprocess.Popen = subprocess.Popen(
-                untraced_command_line,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE if DETECT_OUTPUT_DIFFERENTIALS else subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env=tc.env,
-            )
-            assert untraced_proc.stdin is not None
-            untraced_proc.stdin.write(current_input)
-            untraced_proc.stdin.close()
-            untraced_procs.append(untraced_proc)
+            if tc.record_differentials:
+                untraced_command_line: List[str] = make_command_line(tc, None, None)
+                untraced_proc: subprocess.Popen = subprocess.Popen(
+                    untraced_command_line,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE if DETECT_OUTPUT_DIFFERENTIALS else subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    env=tc.env,
+                )
+                assert untraced_proc.stdin is not None
+                untraced_proc.stdin.write(current_input)
+                untraced_proc.stdin.close()
+                untraced_procs.append(untraced_proc)
+            else:
+                untraced_procs.append(None)
 
     # Wait for the processes to exit
     for proc in itertools.chain(untraced_procs, traced_procs):
@@ -245,16 +248,17 @@ def run_executables(current_inputs: Tuple[bytes], disable_tracing: bool = False)
         parse_trees: List[ParseTree | None] = []
         traces: List[FrozenSet[int]] = []
         for tc, target_num in zip(TARGET_CONFIGS, range(len(TARGET_CONFIGS))):
-            # Recover statuses and parse trees
             proc = untraced_procs[process_counter]
             process_counter += 1
-            status = proc.returncode if DIFFERENTIATE_NONZERO_EXIT_STATUSES else int(proc.returncode)
-            statuses.append(status)
-            parse_trees.append(
-                ParseTree(**{k: v for k, v in json.loads(proc.stdout.read()).items()})
-                if proc.stdout is not None and status == 0
-                else None
-            )
+            # Recover statuses and parse trees
+            if proc is not None:
+                status = proc.returncode if DIFFERENTIATE_NONZERO_EXIT_STATUSES else int(proc.returncode)
+                statuses.append(status)
+                parse_trees.append(
+                    ParseTree(**{k: v for k, v in json.loads(proc.stdout.read()).items()})
+                    if proc.stdout is not None and status == 0
+                    else None
+                )
             # Recover fingerprint
             if not disable_tracing:
                 # Recover fingerprint
