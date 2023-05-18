@@ -63,20 +63,20 @@ assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 fingerprint_t = Tuple[FrozenSet[int], ...]
 
 
-def grammar_mutate(m: re.Match, _: bytes) -> bytes:
+def grammar_mutate(b: bytes) -> bytes:
     # This function takes _ so it can have the same
     # signature as the other mutators after currying with m,
     # even though _ is ignored.
+    m: re.Match[bytes] | None = re.match(grammar_re, b)
+    assert m is not None
+
     rule_name, orig_rule_match = random.choice(list(filter(lambda p: bool(p[1]), m.groupdict().items())))
     new_rule_match: bytes = generate_random_matching_input(grammar_dict[rule_name])
 
     # This has a chance of being wrong, but that's okay in my opinion
     slice_index: int = m.string.index(orig_rule_match)
 
-    return bytes(
-        m.string[:slice_index] + new_rule_match + m.string[slice_index + len(orig_rule_match) :],
-        "UTF-8",
-    )
+    return bytes(m.string[:slice_index] + new_rule_match + m.string[slice_index + len(orig_rule_match) :])
 
 
 def byte_change(b: bytes) -> bytes:
@@ -101,12 +101,8 @@ def mutate(b: bytes) -> bytes:
     if len(b) > 1:
         mutators.append(byte_delete)
     if USE_GRAMMAR_MUTATIONS:
-        try:
-            m: re.Match | None = re.match(grammar_re, str(b, "UTF-8"))
-            if m is not None:
-                mutators.append(functools.partial(grammar_mutate, m))
-        except UnicodeDecodeError:
-            pass
+        if re.match(grammar_re, b) is not None:
+            mutators.append(grammar_mutate)
 
     return random.choice(mutators)(b)
 

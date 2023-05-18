@@ -19,7 +19,7 @@ from re._parser import (  # type: ignore
     BRANCH,
     ANY,
 )
-import re._constants  # type: ignore
+from re._constants import _NamedIntConstant as RegexConstant  # type: ignore
 import random
 from typing import Dict, FrozenSet, Any, Iterable, Set
 
@@ -104,7 +104,7 @@ LS32_PAT: str = rf"(?:{H16_PAT}:{H16_PAT}|{IPV4ADDRESS_PAT})"
 #             / [ *5( h16 ":" ) h16 ] "::"              h16
 #             / [ *6( h16 ":" ) h16 ] "::"
 IPV6ADDRESS_PAT: str = (
-    r"("
+    "("
     + r"|".join(
         (
             rf"(?:{H16_PAT}:){{6}}{LS32_PAT}",
@@ -128,8 +128,6 @@ IPVFUTURE_RE: re.Pattern = re.compile(IPVFUTURE_PAT)
 
 # IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
 IP_LITERAL_PAT: str = rf"(\[(?:{IPV6ADDRESS_PAT}|{IPVFUTURE_PAT})\])"
-# ipvfuture is often unimplemented, so omit it:
-# IP_LITERAL_PAT: str = rf"(\[{IPV6ADDRESS_PAT}\])"
 IP_LITERAL_RE: re.Pattern = re.compile(IPV6ADDRESS_PAT)
 
 # reg-name = *( unreserved / pct-encoded / sub-delims )
@@ -161,20 +159,20 @@ HIER_PART_RE: re.Pattern = re.compile(HIER_PART_PAT)
 
 # URI = scheme ":" hier-part [ "?" query ] [ "#" fragment ]
 URI_PAT: str = rf"({SCHEME_PAT}:{HIER_PART_PAT}(?:\?{QUERY_PAT})?(?:#{FRAGMENT_PAT})?)"
-URI_RE: re.Pattern = re.compile(URI_PAT)
+URI_RE: re.Pattern = re.compile(URI_PAT.encode("ASCII"))
 
 grammar_re = URI_RE
-grammar_dict: Dict[str, str] = {
-    "query": QUERY_PAT,
-    "fragment": FRAGMENT_PAT,
-    "scheme": SCHEME_PAT,
-    "path_absolute": PATH_ABSOLUTE_PAT,
-    "path_empty": PATH_EMPTY_PAT,
-    "path_rootless": PATH_ROOTLESS_PAT,
-    "path_abempty": PATH_ABEMPTY_PAT,
-    "userinfo": USERINFO_PAT,
-    "host": HOST_PAT,
-    "port": PORT_PAT,
+grammar_dict: Dict[str, bytes] = {
+    "query": QUERY_PAT.encode("ASCII"),
+    "fragment": FRAGMENT_PAT.encode("ASCII"),
+    "scheme": SCHEME_PAT.encode("ASCII"),
+    "path_absolute": PATH_ABSOLUTE_PAT.encode("ASCII"),
+    "path_empty": PATH_EMPTY_PAT.encode("ASCII"),
+    "path_rootless": PATH_ROOTLESS_PAT.encode("ASCII"),
+    "path_abempty": PATH_ABEMPTY_PAT.encode("ASCII"),
+    "userinfo": USERINFO_PAT.encode("ASCII"),
+    "host": HOST_PAT.encode("ASCII"),
+    "port": PORT_PAT.encode("ASCII"),
 }
 
 
@@ -192,7 +190,7 @@ DIGIT_CHARSET: FrozenSet[int] = frozenset(b"0123456789")
 ALL_CHARSET: FrozenSet[int] = frozenset(range(256))
 
 
-def category_to_charset(category: re._constants._NamedIntConstant) -> FrozenSet[int]:
+def category_to_charset(category: RegexConstant) -> FrozenSet[int]:
     if category == CATEGORY_DIGIT:
         return DIGIT_CHARSET
     if category == CATEGORY_NOT_DIGIT:
@@ -217,7 +215,7 @@ def helper(parse_tree: SubPattern) -> bytes:
     if len(parse_tree) == 0:
         return result
     curr = parse_tree[0]
-    node_type: re._constants._NamedIntConstant = curr[0]
+    node_type: RegexConstant = curr[0]
     node_value: Any = curr[1]
     if node_type == LITERAL:
         code_point: int = node_value
