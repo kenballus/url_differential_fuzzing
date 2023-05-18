@@ -21,9 +21,11 @@ source ./url_fuzz_env/bin/activate || fail "Couldn't activate the venv."
 pip3 install --upgrade pip &>/dev/null || { deactivate; fail "Couldn't update pip."; }
 echo "done"
 
-echo -n "Installing fuzzing targets..."
+echo "Installing fuzzing targets..."
 for target in targets/*; do
+    printf "    Installing $(basename $target)..."
     cd $target && make &>/dev/null && cd ../.. || { deactivate; fail "Couldn't install local package $target."; }
+    printf "done\n"
 done
 echo "done"
 
