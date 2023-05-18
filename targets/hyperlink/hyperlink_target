@@ -18,5 +18,5 @@ result["path"] = ("/" if parsed_url.rooted else "") + "/".join(parsed_url.path)
 result["query"] = "&".join(p[0] + (f"={p[1]}" if p[1] is not None else "") for p in parsed_url.query)
 result["fragment"] = parsed_url.fragment
 
-print("{" + ",".join(f"\"{k}\":\"{b64encode(result[k].encode('utf-8')).decode('ascii') if result[k] is not None else ''}\"" for k, v in result.items()) + "}")
-os._exit(0)
+print("{" + ",".join(f"\"{k}\":\"{b64encode(result[k].encode('utf-8')).decode('ascii') if result[k] is not None else ''}\"" for k, v in result.items()) + "}", flush=True)
+_exit(0)

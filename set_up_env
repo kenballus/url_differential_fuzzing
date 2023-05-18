@@ -28,7 +28,7 @@ done
 echo "done"
 
 echo -n "Installing dependencies..."
-for pkg in hypothesis tqdm python-afl black mypy pylint; do
+for pkg in tqdm python-afl black mypy pylint; do
     pip3 install "$pkg" &>/dev/null || { deactivate; fail "Couldn't install remote package $pkg."; }
 done
 echo "done"

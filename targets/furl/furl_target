@@ -18,5 +18,5 @@ result["path"] = str(parsed_url.path)
 result["query"] = str(parsed_url.query)
 result["fragment"] = str(parsed_url.fragment)
 
-print("{" + ",".join(f"\"{k}\":\"{b64encode(result[k].encode('utf-8')).decode('ascii') if result[k] is not None else ''}\"" for k, v in result.items()) + "}")
+print("{" + ",".join(f"\"{k}\":\"{b64encode(result[k].encode('utf-8')).decode('ascii') if result[k] is not None else ''}\"" for k, v in result.items()) + "}", flush=True)
 _exit(0)

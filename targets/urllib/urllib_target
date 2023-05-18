@@ -18,5 +18,5 @@ result["path"] = parsed_url.path + ((';' + parsed_url.params) if parsed_url.para
 result["query"] = parsed_url.query
 result["fragment"] = parsed_url.fragment
 
-print("{" + ",".join(f"\"{k}\":\"{b64encode(result[k].encode('utf-8')).decode('ascii') if result[k] is not None else ''}\"" for k, v in result.items()) + "}")
-os._exit(0)
+print("{" + ",".join(f"\"{k}\":\"{b64encode(result[k].encode('utf-8')).decode('ascii') if result[k] is not None else ''}\"" for k, v in result.items()) + "}", flush=True)
+_exit(0)
