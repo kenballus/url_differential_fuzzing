@@ -27,7 +27,7 @@ DETECT_OUTPUT_DIFFERENTIALS: bool = True
 
 # Set this to True if you want to use grammar mutations.
 # (Requires a grammar.py with the appropriate interface)
-USE_GRAMMAR_MUTATIONS: bool = False
+USE_GRAMMAR_MUTATIONS: bool = True
 
 # When this is True, a differential is registered if two targets exit with different status codes.
 # When it's False, a differential is registered only when one target exits with status 0 and another
