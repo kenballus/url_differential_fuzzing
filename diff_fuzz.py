@@ -14,7 +14,6 @@ import os
 import re
 import json
 import functools
-import math
 import uuid
 import shutil
 import base64
@@ -69,7 +68,7 @@ def grammar_mutate(m: re.Match, _: bytes) -> bytes:
     # signature as the other mutators after currying with m,
     # even though _ is ignored.
     rule_name, orig_rule_match = random.choice(list(filter(lambda p: bool(p[1]), m.groupdict().items())))
-    new_rule_match: str = generate_random_matching_input(grammar_dict[rule_name])
+    new_rule_match: bytes = generate_random_matching_input(grammar_dict[rule_name])
 
     # This has a chance of being wrong, but that's okay in my opinion
     slice_index: int = m.string.index(orig_rule_match)
@@ -408,8 +407,6 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
             file=sys.stderr,
         )
         generation += 1
-        if generation == 3:
-            break
 
 
 if __name__ == "__main__":

@@ -1,12 +1,6 @@
-# grammar.py
-# This is a big regex that should completely match RFC3986.
-
 import re
-import warnings
-from typing import Dict
-
-from hypothesis.strategies import from_regex  # type: ignore
-
+import random
+from typing import Dict, FrozenSet, Any, Iterable, Set
 
 # A grammar maps rule names either a string or a sequence of rule names
 # A terminal always maps to a regex
@@ -163,7 +157,84 @@ grammar_dict: Dict[str, str] = {
 }
 
 
-def generate_random_matching_input(pattern: str) -> str:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return from_regex(r"\A" + pattern + r"\Z").example()
+# This relies on the internal workings of the re module, so don't be surprised if it crashes or doesn't
+# work on versions of Python other than 3.11.3.
+# I do not want to support Unicode, because it would be way harder. This only works for bytes.
+# If you want something that supports Unicode, consider using hypothesis.strategies.from_regex.
+
+WORD_CHARSET: FrozenSet[int] = frozenset(b'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz\xaa\xb2\xb3\xb5\xb9\xba\xbc\xbd\xbe\xc0\xc1\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xcb\xcc\xcd\xce\xcf\xd0\xd1\xd2\xd3\xd4\xd5\xd6\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff')
+SPACE_CHARSET: FrozenSet[int] = frozenset(b'\t\n\x0b\x0c\r\x1c\x1d\x1e\x1f \x85\xa0')
+DIGIT_CHARSET: FrozenSet[int] = frozenset(b'0123456789')
+ALL_CHARSET: FrozenSet[int] = frozenset(range(256))
+
+def category_to_charset(category: re._constants._NamedIntConstant) -> FrozenSet[int]:
+    match category:
+        case re._parser.CATEGORY_DIGIT:
+            return DIGIT_CHARSET
+        case re._parser.CATEGORY_NOT_DIGIT:
+            return negate_charset(DIGIT_CHARSET)
+        case re._parser.CATEGORY_WORD:
+            return WORD_CHARSET
+        case re._parser.CATEGORY_NOT_WORD:
+            return negate_charset(WORD_CHARSET)
+        case re._parser.CATEGORY_SPACE:
+            return SPACE_CHARSET
+        case re._parser.CATEGORY_NOT_SPACE:
+            return negate_charset(SPACE_CHARSET)
+        case _:
+            raise NotImplementedError(f"I don't know how to generate examples of {category}")
+
+def negate_charset(charset: Iterable[int]) -> FrozenSet[int]:
+    return ALL_CHARSET - set(charset)
+
+def helper(parse_tree: re._parser.SubPattern) -> bytes:
+    result: bytes = b""
+    if len(parse_tree) == 0:
+        return result
+    curr = parse_tree[0]
+    node_type: re._constants._NamedIntConstant = curr[0]
+    node_value: Any = curr[1]
+    match node_type:
+        case re._parser.LITERAL:
+            code_point: int = node_value
+            result = bytes([code_point])
+        case re._parser.NOT_LITERAL:
+            forbidden_code_point: int = node_value
+            result = helper([(re._parser.IN, [(re._parser.LITERAL, b) for b in negate_charset([forbidden_code_point])])])
+        case re._parser.MAX_REPEAT:
+            min_reps: int = node_value[0]
+            subpattern: re._parser.SubPattern = node_value[2]
+            for _ in range(min_reps):
+                result += helper(subpattern)
+        case re._parser.SUBPATTERN:
+            result = helper(node_value[3])
+        case re._parser.IN:
+            # This needs to handle literal, range, and category
+            # It also needs to handle negations for all of those
+            need_to_negate: bool = False
+            charset: Set[int] = set()
+            for subpattern in node_value:
+                match subpattern[0]:
+                    case re._parser.NEGATE:
+                        need_to_negate = not need_to_negate
+                    case re._parser.LITERAL:
+                        charset |= set([subpattern[1]])
+                    case re._parser.RANGE:
+                        charset |= set(range(subpattern[1][0], subpattern[1][1] + 1))
+                    case re._parser.CATEGORY:
+                        charset |= category_to_charset(subpattern[1])
+            if need_to_negate:
+                charset = negate_charset(charset)
+            result = bytes([random.choice(list(charset))])
+        case re._parser.BRANCH:
+            result = helper(random.choice(node_value[1]))
+        case re._parser.ANY:
+            result = helper([(re._parser.IN, [(re._parser.LITERAL, b) for b in ALL_CHARSET])])
+        case _:
+            raise NotImplementedError(f"I don't know how to generate examples of {node_type}")
+
+    return result + helper(parse_tree[1:])
+
+
+def generate_random_matching_input(pattern: bytes) -> bytes:
+    return helper(re._parser.parse(pattern))
