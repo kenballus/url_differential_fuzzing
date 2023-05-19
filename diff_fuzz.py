@@ -19,6 +19,7 @@ import uuid
 import shutil
 import base64
 import time
+import signal
 from pathlib import PosixPath
 from typing import (
     List,
@@ -63,7 +64,6 @@ assert RESULTS_DIR.is_dir()
 assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 
 fingerprint_t = Tuple[FrozenSet[int], ...]
-start_time: float
 
 
 def grammar_regenerate(b: bytes) -> bytes:
