@@ -78,6 +78,17 @@ def grammar_mutate(b: bytes) -> bytes:
 
     return bytes(m.string[:slice_index] + new_rule_match + m.string[slice_index + len(orig_rule_match) :])
 
+def grammar_duplicate(b: bytes) -> bytes:
+    m: re.Match[bytes] | None = re.match(grammar_re, b)
+    assert m is not None
+
+    orig_rule_match = random.choice(list(filter(lambda p: bool(p[1]), m.groupdict().items())))[1]
+
+    # This has a chance of being wrong, but that's okay
+    slice_index: int = m.string.index(orig_rule_match)
+
+    return bytes(m.string[:slice_index] + orig_rule_match + m.string[slice_index:])
+
 
 def byte_change(b: bytes) -> bytes:
     index: int = random.randint(0, len(b) - 1)
@@ -103,6 +114,7 @@ def mutate(b: bytes) -> bytes:
     if USE_GRAMMAR_MUTATIONS:
         if re.match(grammar_re, b) is not None:
             mutators.append(grammar_mutate)
+            mutators.append(grammar_duplicate)
 
     return random.choice(mutators)(b)
 
