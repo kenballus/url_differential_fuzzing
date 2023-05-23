@@ -40,11 +40,11 @@ SUB_DELIMS_PAT: str = r"(?:[!\$&'\(\)\*\+,;=])"
 PCHAR_PAT: str = rf"(?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT}|:|@)"
 
 # query = *( pchar / "/" / "?" )
-QUERY_PAT: str = rf"(?P<query>{PCHAR_PAT}|/|\?)*"
+QUERY_PAT: str = rf"(?P<query>(?:{PCHAR_PAT}|/|\?)*)"
 QUERY_RE: re.Pattern = re.compile(QUERY_PAT)
 
 # fragment = *( pchar / "/" / "?" )
-FRAGMENT_PAT: str = rf"(?P<fragment>{PCHAR_PAT}|/|\?)*"
+FRAGMENT_PAT: str = rf"(?P<fragment>(?:{PCHAR_PAT}|/|\?)*)"
 FRAGMENT_RE: re.Pattern = re.compile(FRAGMENT_PAT)
 
 # scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
@@ -85,7 +85,7 @@ USERINFO_RE: re.Pattern = re.compile(USERINFO_PAT)
 DEC_OCTET_PAT: str = r"(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])"
 
 # IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
-IPV4ADDRESS_PAT: str = rf"({DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT})"
+IPV4ADDRESS_PAT: str = rf"(?:{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT})"
 IPV4ADDRESS_RE: re.Pattern = re.compile(IPV4ADDRESS_PAT)
 
 # h16 = 1*4HEXDIG
@@ -104,7 +104,7 @@ LS32_PAT: str = rf"(?:{H16_PAT}:{H16_PAT}|{IPV4ADDRESS_PAT})"
 #             / [ *5( h16 ":" ) h16 ] "::"              h16
 #             / [ *6( h16 ":" ) h16 ] "::"
 IPV6ADDRESS_PAT: str = (
-    "("
+    "(?:"
     + r"|".join(
         (
             rf"(?:{H16_PAT}:){{6}}{LS32_PAT}",
@@ -123,15 +123,15 @@ IPV6ADDRESS_PAT: str = (
 IPV6ADDRESS_RE: re.Pattern = re.compile(IPV6ADDRESS_PAT)
 
 # IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
-IPVFUTURE_PAT: str = rf"(v[0-9A-F]+\.(?:{UNRESERVED_PAT}|{SUB_DELIMS_PAT}|:)+)"
+IPVFUTURE_PAT: str = rf"(?:v[0-9A-F]+\.(?:{UNRESERVED_PAT}|{SUB_DELIMS_PAT}|:)+)"
 IPVFUTURE_RE: re.Pattern = re.compile(IPVFUTURE_PAT)
 
 # IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
-IP_LITERAL_PAT: str = rf"(\[(?:{IPV6ADDRESS_PAT}|{IPVFUTURE_PAT})\])"
+IP_LITERAL_PAT: str = rf"(?:\[(?:{IPV6ADDRESS_PAT}|{IPVFUTURE_PAT})\])"
 IP_LITERAL_RE: re.Pattern = re.compile(IPV6ADDRESS_PAT)
 
 # reg-name = *( unreserved / pct-encoded / sub-delims )
-REG_NAME_PAT: str = rf"((?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT})*)"
+REG_NAME_PAT: str = rf"(?:(?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT})*)"
 REG_NAME_RE: re.Pattern = re.compile(REG_NAME_PAT)
 
 # host = IP-literal / IPv4address / reg-name
@@ -145,7 +145,7 @@ PORT_PAT: str = r"(?P<port>0*[1-9]?[0-9]?[0-9]?[0-9]?|0*6553[0-5]|0*655[0-2][0-9
 PORT_RE: re.Pattern = re.compile(PORT_PAT)
 
 # authority = [ userinfo "@" ] host [ ":" port ]
-AUTHORITY_PAT: str = rf"((?:{USERINFO_PAT}@)?{HOST_PAT}(:{PORT_PAT})?)"
+AUTHORITY_PAT: str = rf"(?:(?:{USERINFO_PAT}@)?{HOST_PAT}(?::{PORT_PAT})?)"
 AUTHORITY_RE: re.Pattern = re.compile(AUTHORITY_PAT)
 
 # hier-part = "//" authority path-abempty
@@ -153,26 +153,26 @@ AUTHORITY_RE: re.Pattern = re.compile(AUTHORITY_PAT)
 #           / path-rootless
 #           / path-empty
 HIER_PART_PAT: str = (
-    rf"((?://{AUTHORITY_PAT}{PATH_ABEMPTY_PAT})|{PATH_ABSOLUTE_PAT}|{PATH_ROOTLESS_PAT}|{PATH_EMPTY_PAT})"
+    rf"(?:(?://{AUTHORITY_PAT}{PATH_ABEMPTY_PAT})|{PATH_ABSOLUTE_PAT}|{PATH_ROOTLESS_PAT}|{PATH_EMPTY_PAT})"
 )
 HIER_PART_RE: re.Pattern = re.compile(HIER_PART_PAT)
 
 # URI = scheme ":" hier-part [ "?" query ] [ "#" fragment ]
-URI_PAT: str = rf"({SCHEME_PAT}:{HIER_PART_PAT}(?:\?{QUERY_PAT})?(?:#{FRAGMENT_PAT})?)"
+URI_PAT: str = rf"(?:{SCHEME_PAT}:{HIER_PART_PAT}(?:\?{QUERY_PAT})?(?:#{FRAGMENT_PAT})?)"
 URI_RE: re.Pattern = re.compile(URI_PAT.encode("ASCII"))
 
 grammar_re = URI_RE
 grammar_dict: Dict[str, bytes] = {
-    "query": QUERY_PAT.encode("ASCII"),
-    "fragment": FRAGMENT_PAT.encode("ASCII"),
     "scheme": SCHEME_PAT.encode("ASCII"),
-    "path_absolute": PATH_ABSOLUTE_PAT.encode("ASCII"),
-    "path_empty": PATH_EMPTY_PAT.encode("ASCII"),
-    "path_rootless": PATH_ROOTLESS_PAT.encode("ASCII"),
-    "path_abempty": PATH_ABEMPTY_PAT.encode("ASCII"),
     "userinfo": USERINFO_PAT.encode("ASCII"),
     "host": HOST_PAT.encode("ASCII"),
     "port": PORT_PAT.encode("ASCII"),
+    "path_abempty": PATH_ABEMPTY_PAT.encode("ASCII"),
+    "path_absolute": PATH_ABSOLUTE_PAT.encode("ASCII"),
+    "path_rootless": PATH_ROOTLESS_PAT.encode("ASCII"),
+    "path_empty": PATH_EMPTY_PAT.encode("ASCII"),
+    "query": QUERY_PAT.encode("ASCII"),
+    "fragment": FRAGMENT_PAT.encode("ASCII"),
 }
 
 

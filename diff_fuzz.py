@@ -63,20 +63,32 @@ assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 fingerprint_t = Tuple[FrozenSet[int], ...]
 
 
-def grammar_mutate(b: bytes) -> bytes:
-    # This function takes _ so it can have the same
-    # signature as the other mutators after currying with m,
-    # even though _ is ignored.
+def grammar_regenerate(b: bytes) -> bytes:
+    # Assumes that b matches the grammar_re.
+    # Returns a mutated b with a portion regenerated.
     m: re.Match[bytes] | None = re.match(grammar_re, b)
     assert m is not None
-
-    rule_name, orig_rule_match = random.choice(list(filter(lambda p: bool(p[1]), m.groupdict().items())))
+    rule_name: str = random.choice(
+        [rule_name for rule_name, rule_match in m.groupdict().items() if rule_match is not None]
+    )
     new_rule_match: bytes = generate_random_matching_input(grammar_dict[rule_name])
+    start, end = m.span(rule_name)
+    return m.string[:start] + new_rule_match + m.string[end:]
 
-    # This has a chance of being wrong, but that's okay in my opinion
-    slice_index: int = m.string.index(orig_rule_match)
 
-    return bytes(m.string[:slice_index] + new_rule_match + m.string[slice_index + len(orig_rule_match) :])
+def grammar_duplicate(b: bytes) -> bytes:
+    # Assumes that b matches the grammar_re.
+    # Returns a mutated b with a portion duplicated some number of times.
+    m: re.Match[bytes] | None = re.match(grammar_re, b)
+    assert m is not None
+    rule_name: str = random.choice(
+        [rule_name for rule_name, rule_match in m.groupdict().items() if rule_match is not None]
+    )
+    start, end = m.span(rule_name)
+    new_rule_match: bytes = m[rule_name]
+    for _ in range(randint(1, 5)):
+        new_rule_match *= 2
+    return m.string[:start] + new_rule_match + m.string[end:]
 
 
 def byte_change(b: bytes) -> bytes:
@@ -102,7 +114,8 @@ def mutate(b: bytes) -> bytes:
         mutators.append(byte_delete)
     if USE_GRAMMAR_MUTATIONS:
         if re.match(grammar_re, b) is not None:
-            mutators.append(grammar_mutate)
+            mutators.append(grammar_regenerate)
+            mutators.append(grammar_duplicate)
 
     return random.choice(mutators)(b)
 
