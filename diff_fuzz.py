@@ -86,7 +86,7 @@ def grammar_duplicate(b: bytes) -> bytes:
     )
     start, end = m.span(rule_name)
     new_rule_match: bytes = m[rule_name]
-    for _ in range(randint(1, 5)):
+    for _ in range(random.randint(1, 5)):
         new_rule_match *= 2
     return m.string[:start] + new_rule_match + m.string[end:]
 
@@ -280,7 +280,7 @@ def trace_batch(work_dir: PosixPath, batch: List[bytes]) -> List[fingerprint_t]:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=tc.env,
-            cwd=str(work_dir.resolve()), # because afl makes temp files
+            cwd=str(work_dir.resolve()),  # because afl makes temp files
         )
         procs.append(proc)
 
