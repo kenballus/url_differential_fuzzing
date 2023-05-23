@@ -280,6 +280,7 @@ def trace_batch(work_dir: PosixPath, batch: List[bytes]) -> List[fingerprint_t]:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=tc.env,
+            cwd=str(work_dir.resolve()), # because afl makes temp files
         )
         procs.append(proc)
 
@@ -443,3 +444,5 @@ if __name__ == "__main__":
     for ctr, final_result in enumerate(final_results):
         with open(RESULTS_DIR.joinpath(run_id).joinpath(f"differential_{ctr}"), "wb") as result_file:
             result_file.write(final_result)
+
+    shutil.rmtree(run_dir)
