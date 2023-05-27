@@ -2,7 +2,8 @@
 # diff_fuzz.py
 # This is a wrapper around afl-showmap that does differential fuzzing a la
 #   https://github.com/nezha-dt/nezha, but much slower.
-# Fuzzing targets are configured in `py`.
+# Fuzzing targets are configured in `config.py`.
+# Grammar is optionally specified in `grammar.py`.
 #############################################################################################
 
 import sys
@@ -351,20 +352,22 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
 
         # Trace all the parser runs
         with multiprocessing.Pool(processes=num_workers) as pool:
-            fingerprints: List[fingerprint_t] = functools.reduce(
-                list.__add__,
-                tqdm.tqdm(
-                    pool.imap(functools.partial(trace_batch, work_dir), batches),
-                    desc="Tracing parsers...",
-                    total=len(batches),
-                ),
+            fingerprints: List[fingerprint_t] = list(
+                functools.reduce(
+                    list.__add__,
+                    tqdm.tqdm(
+                        pool.map(functools.partial(trace_batch, work_dir), batches),
+                        desc="Tracing parsers...",
+                        total=len(batches),
+                    ),
+                )
             )
 
         # Re-run all the parsers, this time collecting stdouts and statuses
         with multiprocessing.Pool(processes=num_workers) as pool:
             statuses_and_parse_trees = list(
                 tqdm.tqdm(
-                    pool.imap(run_targets, input_queue),
+                    pool.map(run_targets, input_queue),
                     desc="Running parsers...",
                     total=len(input_queue),
                 )
@@ -395,7 +398,7 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
         with multiprocessing.Pool(processes=num_workers) as pool:
             minimized_inputs: Iterable[bytes] = list(
                 tqdm.tqdm(
-                    pool.imap(minimize_differential, differentials),
+                    pool.map(minimize_differential, differentials),
                     desc="Minimizing differentials...",
                     total=len(differentials),
                 )
@@ -424,25 +427,25 @@ if __name__ == "__main__":
         print(f"Usage: python3 {sys.argv[0]}", file=sys.stderr)
         sys.exit(1)
 
-    run_id: str = str(uuid.uuid4())
-    run_dir: PosixPath = PosixPath("/tmp").joinpath(f"diff_fuzz-{run_id}")
-    os.mkdir(run_dir)
+    _run_id: str = str(uuid.uuid4())
+    _work_dir: PosixPath = PosixPath("/tmp").joinpath(f"diff_fuzz-{_run_id}")
+    os.mkdir(_work_dir)
 
-    final_results: List[bytes] = []
+    _final_results: List[bytes] = []
     try:
-        main(final_results, run_dir)
+        main(_final_results, _work_dir)
     except KeyboardInterrupt:
         pass
 
-    if len(final_results) != 0:
+    if len(_final_results) != 0:
         print("Differentials:", file=sys.stderr)
-        print("\n".join(repr(b) for b in final_results))
+        print("\n".join(repr(b) for b in _final_results))
     else:
         print("No differentials found! Try increasing ROUGH_DESIRED_QUEUE_LEN.", file=sys.stderr)
 
-    os.mkdir(RESULTS_DIR.joinpath(run_id))
-    for ctr, final_result in enumerate(final_results):
-        with open(RESULTS_DIR.joinpath(run_id).joinpath(f"differential_{ctr}"), "wb") as result_file:
+    os.mkdir(RESULTS_DIR.joinpath(_run_id))
+    for ctr, final_result in enumerate(_final_results):
+        with open(RESULTS_DIR.joinpath(_run_id).joinpath(f"differential_{ctr}"), "wb") as result_file:
             result_file.write(final_result)
 
-    shutil.rmtree(run_dir)
+    shutil.rmtree(_work_dir)
