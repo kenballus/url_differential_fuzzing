@@ -1,8 +1,6 @@
 #!/bin/sh
 
-pushd $(dirname $0)
-
-rm -rf curl && \
+[ ! -d curl ] && \
 git clone https://github.com/curl/curl && \
 cd curl && autoreconf -fi && \
 export CC=afl-clang-fast && \
@@ -29,5 +27,3 @@ export CC=afl-clang-fast && \
             --without-quiche \
             --without-msh3 && \
 make -j$(nproc)
-
-popd

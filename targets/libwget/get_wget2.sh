@@ -1,8 +1,6 @@
 #!/bin/sh
 
-pushd $(dirname $0)
-
-rm -rf wget2 && \
+[ ! -d wget2 ] && \
 git clone https://gitlab.com/gnuwget/wget2.git && \
 cd wget2 && ./bootstrap && \
 export CC=afl-clang-fast && \
@@ -25,5 +23,3 @@ export CC=afl-clang-fast && \
             --without-libmicrohttpd \
             --without-plugin-support && \
 make -j$(nproc)
-
-popd
