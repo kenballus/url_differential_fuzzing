@@ -356,7 +356,7 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
                 functools.reduce(
                     list.__add__,
                     tqdm.tqdm(
-                        pool.map(functools.partial(trace_batch, work_dir), batches),
+                        pool.imap(functools.partial(trace_batch, work_dir), batches),
                         desc="Tracing parsers...",
                         total=len(batches),
                     ),
@@ -367,7 +367,7 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
         with multiprocessing.Pool(processes=num_workers) as pool:
             statuses_and_parse_trees = list(
                 tqdm.tqdm(
-                    pool.map(run_targets, input_queue),
+                    pool.imap(run_targets, input_queue),
                     desc="Running parsers...",
                     total=len(input_queue),
                 )
@@ -398,7 +398,7 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
         with multiprocessing.Pool(processes=num_workers) as pool:
             minimized_inputs: Iterable[bytes] = list(
                 tqdm.tqdm(
-                    pool.map(minimize_differential, differentials),
+                    pool.imap(minimize_differential, differentials),
                     desc="Minimizing differentials...",
                     total=len(differentials),
                 )
