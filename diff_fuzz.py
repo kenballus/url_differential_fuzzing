@@ -338,7 +338,7 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
     # This is the set of fingerprints that correspond with minimized differentials.
     # Whenever we minimize a differential into an input with a fingerprint not in this set,
     # we report it and add it to this set.
-    minimized_fingerprints: Set[fingerprint_t] = set()
+    seen_minimized_fingerprints: Set[fingerprint_t] = set()
 
     generation: int = 0
 
@@ -362,7 +362,7 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
                     ),
                 )
             )
-
+        
         # Re-run all the parsers, this time collecting stdouts and statuses
         with multiprocessing.Pool(processes=num_workers) as pool:
             statuses_and_parse_trees = list(
@@ -396,18 +396,33 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
 
         # Minimize differentials
         with multiprocessing.Pool(processes=num_workers) as pool:
-            minimized_inputs: Iterable[bytes] = list(
+            minimized_inputs: List[bytes] = list(
                 tqdm.tqdm(
                     pool.imap(minimize_differential, differentials),
                     desc="Minimizing differentials...",
                     total=len(differentials),
                 )
             )
-        for minimized_input in minimized_inputs:
-            minimized_fingerprint: fingerprint_t = trace_batch(work_dir, [minimized_input])[0]
-            if minimized_fingerprint not in minimized_fingerprints:
+
+        # Trace minimized differentials
+        minimized_batches: List[List[bytes]] = split_input_queue(minimized_inputs, num_workers)
+        with multiprocessing.Pool(processes=num_workers) as pool:
+            minimized_fingerprints: List[fingerprint_t] = list(
+                functools.reduce(
+                    list.__add__,
+                    tqdm.tqdm(
+                        pool.imap(functools.partial(trace_batch, work_dir), minimized_batches),
+                        desc="Tracing minimizations...",
+                        total=len(batches),
+                    ),
+                )
+            )
+
+        # Record newly found bugs
+        for minimized_fingerprint, minimized_input in zip(minimized_fingerprints, minimized_inputs):
+            if minimized_fingerprint not in seen_minimized_fingerprints:
                 minimized_differentials.append(minimized_input)
-                minimized_fingerprints.add(minimized_fingerprint)
+                seen_minimized_fingerprints.add(minimized_fingerprint)
 
         input_queue.clear()
         while len(mutation_candidates) != 0 and len(input_queue) < ROUGH_DESIRED_QUEUE_LEN:
