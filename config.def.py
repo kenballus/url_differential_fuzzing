@@ -44,8 +44,8 @@ DELETION_LENGTHS: List[int] = [4, 3, 2, 1]
 
 # This is the parse tree class for your programs' output.
 # If DETECT_OUTPUT_DIFFERENTIALS is set to False, then you can leave this as it is.
-# Otherwise, our suggestions is that your programs output JSON with field values base64-encoded if need be.
-# In that case, this struct should have a signle field for each top-level field in that JSON object.
+# Otherwise, our suggestion is that your programs output JSON with field values base64-encoded if need be.
+# In that case, this struct should have a single field for each field in that JSON object.
 @dataclass(frozen=True)
 class ParseTree:
     scheme: bytes
@@ -88,8 +88,8 @@ class TargetConfig:
     cli_args: List[str] = field(default_factory=list)
     # Whether this executable should be traced.
     # (turning off tracing is useful for untraceable
-    #  oracle targets, such as those written in
-    #  unsupported languages)
+    #  targets, such as those written in unsupported
+    #  languages)
     needs_tracing: bool = True
     # Whether this executable needs to run in QEMU mode
     # (should be True when target is not instrumented for AFL)
