@@ -11,6 +11,7 @@ fail() {
 echo -n "Checking for dependencies..."
 which afl-showmap &>/dev/null || fail "Please install AFL++."
 which python3 &>/dev/null || fail "Please install python3."
+which git &>/dev/null || fail "Please install git."
 echo "done"
 
 echo -n "Setting up venv..."
