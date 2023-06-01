@@ -116,7 +116,6 @@ def mutate(b: bytes) -> bytes:
     if USE_GRAMMAR_MUTATIONS:
         if re.match(grammar_re, b) is not None:
             mutators.append(grammar_regenerate)
-            mutators.append(grammar_duplicate)
 
     return random.choice(mutators)(b)
 
