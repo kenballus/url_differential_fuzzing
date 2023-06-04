@@ -3,7 +3,7 @@ all: config format typecheck lint
 	python3 diff_fuzz.py
 
 config:
-	[ -e config.py ] || cp config.def.py config.py
+	[ -e config.py ] || cp config.defpy config.py
 
 format:
 	black -l 110 *.py
