@@ -71,21 +71,6 @@ def grammar_regenerate(b: bytes) -> bytes:
     return m.string[:start] + new_rule_match + m.string[end:]
 
 
-def grammar_duplicate(b: bytes) -> bytes:
-    # Assumes that b matches the grammar_re.
-    # Returns a mutated b with a portion duplicated some number of times.
-    m: re.Match[bytes] | None = re.match(grammar_re, b)
-    assert m is not None
-    rule_name: str = random.choice(
-        [rule_name for rule_name, rule_match in m.groupdict().items() if rule_match is not None]
-    )
-    start, end = m.span(rule_name)
-    new_rule_match: bytes = m[rule_name]
-    for _ in range(random.randint(1, 5)):
-        new_rule_match *= 2
-    return m.string[:start] + new_rule_match + m.string[end:]
-
-
 def byte_change(b: bytes) -> bytes:
     index: int = random.randint(0, len(b) - 1)
     return b[:index] + bytes([random.randint(0, 255)]) + b[index + 1 :]
@@ -110,7 +95,6 @@ def mutate(b: bytes) -> bytes:
     if USE_GRAMMAR_MUTATIONS:
         if re.match(grammar_re, b) is not None:
             mutators.append(grammar_regenerate)
-            mutators.append(grammar_duplicate)
 
     return random.choice(mutators)(b)
 
