@@ -19,7 +19,7 @@ import uuid
 import shutil
 import base64
 from pathlib import PosixPath
-from typing import Callable, Iterable
+from typing import Callable
 
 
 from tqdm import tqdm  # type: ignore
@@ -202,7 +202,7 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
 def run_targets(the_input: bytes) -> tuple[tuple[int, ...], tuple[ParseTree | None, ...]]:
     """
     This function needs a better name.
-    This runs the parsers on an input, and returns a (exit_statuses, parse_trees) pair.
+    This runs the targets on an input, and returns a (exit_statuses, parse_trees) pair.
     (A call to this function makes one process for each configured target)
     """
     procs: list[subprocess.Popen] = []
@@ -352,7 +352,7 @@ def main(minimized_differentials: list[bytes], work_dir: PosixPath) -> None:
         batches: list[list[bytes]] = split_input_queue(input_queue, num_workers)
 
         # Trace all the parser runs
-        print("Tracing parsers...", end="", file=sys.stderr)
+        print("Tracing targets...", end="", file=sys.stderr)
         with multiprocessing.Pool(processes=num_workers) as pool:
             new_fingerprints: list[fingerprint_t] = sum(
                 pool.imap(functools.partial(trace_batch, work_dir), batches),
@@ -360,12 +360,12 @@ def main(minimized_differentials: list[bytes], work_dir: PosixPath) -> None:
             )
         print("Done!", file=sys.stderr)
 
-        # Re-run all the parsers, this time collecting stdouts and statuses
+        # Re-run all the targets, this time collecting stdouts and statuses
         with multiprocessing.Pool(processes=num_workers) as pool:
             statuses_and_parse_trees: list[tuple[tuple[int, ...], tuple[ParseTree | None, ...]]] = list(
                 tqdm(
                     pool.imap(run_targets, input_queue),
-                    desc="Running parsers...",
+                    desc="Running targets...",
                     total=len(input_queue),
                 )
             )
@@ -401,9 +401,16 @@ def main(minimized_differentials: list[bytes], work_dir: PosixPath) -> None:
                 )
             )
             print("Tracing minimized differentials...", file=sys.stderr)
-            new_minimized_fingerprints: list[fingerprint_t] = sum(pool.imap(functools.partial(trace_batch, work_dir), split_input_queue(minimized_inputs, num_workers)), [])
+            new_minimized_fingerprints: list[fingerprint_t] = sum(
+                pool.imap(
+                    functools.partial(trace_batch, work_dir), split_input_queue(minimized_inputs, num_workers)
+                ),
+                [],
+            )
             print("Done!", file=sys.stderr)
-            for new_minimized_fingerprint, minimized_input in zip(new_minimized_fingerprints, minimized_inputs):
+            for new_minimized_fingerprint, minimized_input in zip(
+                new_minimized_fingerprints, minimized_inputs
+            ):
                 if new_minimized_fingerprint not in minimized_fingerprints:
                     minimized_differentials.append(minimized_input)
                     minimized_fingerprints.add(new_minimized_fingerprint)
