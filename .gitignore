@@ -6,3 +6,4 @@ url_fuzz_env/*
 .mypy_cache/*
 python_pkgs/*
 results
+config.py
