@@ -19,7 +19,11 @@ SEED_DIR: PosixPath = PosixPath("./seeds")
 RESULTS_DIR: PosixPath = PosixPath("./results")
 
 # Time in milliseconds given to each process
-TIMEOUT_TIME: int = 10000
+TIMEOUT_TIME: int = 50000
+
+# Time in seconds to auto-terminate the fuzzer
+# Set to -1 to disable auto termination
+AUTO_TERMINATION_TIME: int = 20
 
 # Set this to False if you only care about exit status differentials
 # (i.e. the programs you're testing aren't expected to have identical output on stdout)

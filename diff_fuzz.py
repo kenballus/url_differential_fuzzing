@@ -19,7 +19,6 @@ import uuid
 import shutil
 import base64
 import time
-import signal
 from pathlib import PosixPath
 from typing import (
     List,
@@ -445,12 +444,12 @@ if __name__ == "__main__":
         pass
     print("{")
     print(f"\"RunTime\":\"{'{:.2f}'.format(time.time() - start_time)}\",")
-    print('"Differentials:"[')
+    print('"Differentials":[')
     if len(_final_results) != 0:
         print(
             ",\n".join(
-                f"{{\"File\":\"{i}\", \"Time\":\"{'{:.2f}'.format(b[1])}\", \"Generation\":\"{b[2]}\"}}"
-                for i, b in enumerate(_final_results)
+                f"{{\"File\":\"{idx}\", \"Time\":\"{'{:.2f}'.format(b[1])}\", \"Generation\":\"{b[2]}\"}}"
+                for idx, b in enumerate(_final_results)
             )
         )
     else:
@@ -460,7 +459,7 @@ if __name__ == "__main__":
 
     shutil.rmtree(_work_dir)
 
-    os.mkdir(RESULTS_DIR.joinpath(_work_dir))
-    for i, final_result in enumerate(_final_results):
-        with open(RESULTS_DIR.joinpath(_work_dir).joinpath(f"{i}"), "wb") as result_file:
+    os.mkdir(RESULTS_DIR.joinpath(_run_id))
+    for idx, final_result in enumerate(_final_results):
+        with open(RESULTS_DIR.joinpath(_run_id).joinpath(f"{idx}"), "wb") as result_file:
             result_file.write(final_result[0])
