@@ -3,17 +3,6 @@
 # Go to the correct folder
 cd $(dirname $0)
 
-# Arg1 = targetconfig file to draw from
-select_targets () {
-    echo "Selecting Targets From: ${1}" >> records.txt
-    cutoff=$(cat ../config.py | grep TARGET_CONFIG -n | tail -1 | grep -Eo "[0-9]+:" | grep -Eo "[0-9]+")
-    stopline=$(expr ${cutoff} - 1)
-    cat ../config.py | head -${stopline} > temp_target_select.py
-    cat $1 >> temp_target_select.py
-    cp temp_target_select.py ../config.py
-    rm temp_target_select.py
-}
-
 # Arg1 = name of the run
 do_run () {
     # Clear previous folder if it exists
@@ -50,14 +39,7 @@ main (){
             git checkout $commit >> records.txt
             git reset --hard >> records.txt
             # Do the run
-            if [ "$tcs" = "standards" ]
-            then
-                for config_name in standard_targets/*
-                do
-                    select_targets $config_name
-                    do_run ${name}_$(basename $config_name)
-                done
-            elif [ "$tcs" = "" ]
+            if [ "$tcs" = "" ]
             then
                 do_run ${name}
             else

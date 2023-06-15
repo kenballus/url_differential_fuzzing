@@ -10,6 +10,5 @@ config.py
 benchmarking/analyses
 benchmarking/runs
 benchmarking/bench_configs
-benchmarking/standard_targets
 benchmarking/benchmark_queue
 benchmarking/records.txt
