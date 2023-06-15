@@ -1,6 +1,6 @@
 #!/bin/sh
 
-[ ! -d curl ] && \
+[ ! -d curl ] || exit 0 && \
 git clone https://github.com/curl/curl && \
 cd curl && autoreconf -fi && \
 export CC=afl-clang-fast && \
