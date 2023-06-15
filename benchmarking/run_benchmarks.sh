@@ -4,6 +4,7 @@
 cd $(dirname $0)
 
 # Arg1 = name of the run
+# Arg2 = timeout of the run
 do_run () {
     # Clear previous folder if it exists
     rm -rf runs/$1
@@ -12,7 +13,7 @@ do_run () {
     # Go to main folder
     cd ..
     # Run
-    timeout --signal=2 15 python diff_fuzz.py $1 1> benchmarking/runs/$1/report.json 2>> benchmarking/records.txt
+    timeout --signal=2 $2 python diff_fuzz.py $1 1> benchmarking/runs/$1/report.json 2>> benchmarking/records.txt
     # Return
     cd benchmarking
     # Gather Data
@@ -28,10 +29,12 @@ main (){
         do
             name=$(echo $line | awk '{print $1}')
             commit=$(echo $line | awk '{print $2}')
-            tcs=$(echo $line | awk '{print $3}')
+            timeout=$(echo $line | awk '{print $3}')
+            tcs=$(echo $line | awk '{print $4}')
             echo "-------------------------------------------------------------------" >> records.txt
             echo $name >> records.txt
             echo $commit >> records.txt
+            echo $timeout >> records.txt
             echo $tcs >> records.txt
             echo "-------------------------------------------------------------------" >> records.txt        
             # Switch to correct commit
@@ -41,11 +44,11 @@ main (){
             # Do the run
             if [ "$tcs" = "" ]
             then
-                do_run ${name}
+                do_run ${name} ${timeout}
             else
                 echo "Copying ${tcs} into the config file.." >> records.txt
                 cat "bench_configs/${tcs}" > ../config.py
-                do_run ${name}
+                do_run ${name} ${timeout}
             fi
         done
     else

@@ -16,7 +16,7 @@ Run:
 
 In the benchmarking_queue file. Tests can be added as followed.
 
-```TestName CommitNumber Optional[configfile]```
+```TestName CommitNumber Time Optional[configfile]```
 
 Each test's results will be saved into ```runs/TestName```
 
@@ -25,6 +25,8 @@ Each Test will be run on ```CommitNumber``` with config ```configfile```
 ```configfile``` must correspond to the name of a config file in the bench_configs folder
 
 If no config file is specified each test will be run on the same config file as the test before it. If it is the first test it will be run on the current config file.
+
+Each Test will either run out of mutation candidates or will be forcefully ended after ```Time``` seconds have elapsed
 
 Example:
 
