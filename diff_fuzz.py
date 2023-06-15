@@ -18,6 +18,7 @@ import functools
 import uuid
 import shutil
 import base64
+import time
 from pathlib import PosixPath
 from typing import (
     List,
@@ -62,6 +63,7 @@ assert RESULTS_DIR.is_dir()
 assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 
 fingerprint_t = Tuple[FrozenSet[int], ...]
+start_time: float
 
 
 def grammar_regenerate(b: bytes) -> bytes:
@@ -309,7 +311,8 @@ def split_input_queue(l: List[bytes], num_chunks: int) -> List[List[bytes]]:
     ]
 
 
-def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
+def main(minimized_differentials: List[Tuple[bytes, float, int]], work_dir: PosixPath) -> None:
+    global start_time
     # We take minimized_differentials as an argument because we want
     # it to persist even if this function has an uncaught exception.
     assert len(minimized_differentials) == 0
@@ -405,7 +408,7 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
         for minimized_input in minimized_inputs:
             minimized_fingerprint: fingerprint_t = trace_batch(work_dir, [minimized_input])[0]
             if minimized_fingerprint not in minimized_fingerprints:
-                minimized_differentials.append(minimized_input)
+                minimized_differentials.append((minimized_input, time.time() - start_time, generation))
                 minimized_fingerprints.add(minimized_fingerprint)
 
         input_queue.clear()
@@ -423,28 +426,41 @@ def main(minimized_differentials: List[bytes], work_dir: PosixPath) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) > 2:
-        print(f"Usage: python3 {sys.argv[0]}", file=sys.stderr)
+        print(f"Usage: python3 {sys.argv[0]} run_folder", file=sys.stderr)
         sys.exit(1)
 
-    _run_id: str = str(uuid.uuid4())
+    start_time = time.time()
+
+    _run_id: str = sys.argv[1] if len(sys.argv) >= 2 else str(uuid.uuid4())
+    if os.path.exists(RESULTS_DIR.joinpath(_run_id)):
+        print(f"Results folder already exists. Overriding.", file=sys.stderr)
+        shutil.rmtree(RESULTS_DIR.joinpath(_run_id))
     _work_dir: PosixPath = PosixPath("/tmp").joinpath(f"diff_fuzz-{_run_id}")
     os.mkdir(_work_dir)
 
-    _final_results: List[bytes] = []
+    _final_results: List[Tuple[bytes, float, int]] = []
     try:
         main(_final_results, _work_dir)
     except KeyboardInterrupt:
         pass
-
+    print("{")
+    print(f"\"RunTime\":\"{'{:.2f}'.format(time.time() - start_time)}\",")
+    print('"Differentials:"[')
     if len(_final_results) != 0:
-        print("Differentials:", file=sys.stderr)
-        print("\n".join(repr(b) for b in _final_results))
+        print(
+            ",\n".join(
+                f"{{\"File\":\"{i}\", \"Time\":\"{'{:.2f}'.format(b[1])}\", \"Generation\":\"{b[2]}\"}}"
+                for i, b in enumerate(_final_results)
+            )
+        )
     else:
         print("No differentials found! Try increasing ROUGH_DESIRED_QUEUE_LEN.", file=sys.stderr)
-
-    os.mkdir(RESULTS_DIR.joinpath(_run_id))
-    for ctr, final_result in enumerate(_final_results):
-        with open(RESULTS_DIR.joinpath(_run_id).joinpath(f"differential_{ctr}"), "wb") as result_file:
-            result_file.write(final_result)
+    print("]")
+    print("}")
 
     shutil.rmtree(_work_dir)
+
+    os.mkdir(RESULTS_DIR.joinpath(_work_dir))
+    for i, final_result in enumerate(_final_results):
+        with open(RESULTS_DIR.joinpath(_work_dir).joinpath(f"{i}"), "wb") as result_file:
+            result_file.write(final_result[0])
