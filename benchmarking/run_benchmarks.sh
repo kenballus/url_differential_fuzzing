@@ -13,7 +13,7 @@ do_run () {
     # Go to main folder
     cd ..
     # Run
-    timeout --signal=2 $2 python diff_fuzz.py $1 1> benchmarking/runs/$1/report.json 2>> benchmarking/records.txt
+    timeout --foreground --signal=2 $2 python diff_fuzz.py $1 1> benchmarking/runs/$1/report.json 2>> benchmarking/records.txt
     # Return
     cd benchmarking
     # Gather Data
