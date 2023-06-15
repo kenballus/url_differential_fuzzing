@@ -7,19 +7,25 @@ from pathlib import PosixPath
 import shutil
 import itertools
 
-current = os.path.dirname(os.path.realpath(__file__))
-parent = os.path.dirname(current)
-sys.path.append(parent)
+working_dir: str = os.path.dirname(__file__)
+parent_dir = os.path.dirname(working_dir)
+sys.path.append(parent_dir)
 
+os.chdir(parent_dir)
 from diff_fuzz import trace_batch, fingerprint_t
+os.chdir(working_dir)
 
 def main():
+    assert os.path.exists("runs")
+    assert os.path.exists("analyses")
+
     relative: bool = len(sys.argv) > 1
 
     # Ensure relative comparisons are all present
     for run in sys.argv[2:]:
-        if run not in os.listdir("benchmarking/"):
+        if run not in os.listdir("runs/"):
             raise FileNotFoundError(f"Couldn't find the data folder for: {run}")
+
 
     if relative:
         figure, axis = plt.subplots(2)
@@ -27,9 +33,8 @@ def main():
         fingerprints_of_runs: dict[str, list[fingerprint_t]] = {}
         fingerprints_to_bytes: dict[fingerprint_t, bytes] = {}
         
-
-    for run in os.listdir("benchmarking/"):
-        data_folder: str = f"benchmarking/{run}"
+    for run in os.listdir("runs"):
+        data_folder: str = f"runs/{run}"
         if os.path.isdir(data_folder) and (not relative or run in sys.argv):
 
             print(f"Analyzing: {run}", file=sys.stderr)
@@ -91,7 +96,9 @@ def main():
                 if os.path.exists(run_dir):
                     shutil.rmtree(run_dir)
                 os.mkdir(run_dir)
+                os.chdir(parent_dir)
                 fingerprints: list[fingerprint_t] = trace_batch(run_dir, byte_differentials)
+                os.chdir(working_dir)
                 shutil.rmtree(run_dir)
                 for fingerprint, byte_differential in zip(fingerprints, byte_differentials):
                     fingerprints_to_bytes[fingerprint] = byte_differential
@@ -99,12 +106,12 @@ def main():
 
     if relative:
         figure.legend(loc="upper left")
-        plt.savefig(f"benchmarking/{sys.argv[1]}.png", format="png")
+        plt.savefig(f"analyses/{sys.argv[1]}.png", format="png")
         plt.close()
         combos = list(itertools.product([True, False], repeat=len(sys.argv) - 2))
         combos.sort(key=lambda x:sum(x), reverse=True)
         seen_fingerprints: set[fingerprint_t] = set()
-        with open(f'benchmarking/{sys.argv[1]}.txt', 'wb') as comparison_file:
+        with open(f'analyses/{sys.argv[1]}.txt', 'wb') as comparison_file:
             for combo in combos:
                 common: set[fingerprint_t] = set()
                 common_assigned: bool = False
