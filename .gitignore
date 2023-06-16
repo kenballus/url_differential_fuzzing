@@ -7,3 +7,8 @@ url_fuzz_env/*
 python_pkgs/*
 results
 config.py
+benchmarking/analyses
+benchmarking/runs
+benchmarking/bench_configs
+benchmarking/benchmark_queue
+benchmarking/records.txt
