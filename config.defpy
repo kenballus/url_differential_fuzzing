@@ -41,12 +41,14 @@ ROUGH_DESIRED_QUEUE_LEN: int = 1000
 # The default choice was selected because of UTF-8.
 DELETION_LENGTHS: List[int] = [4, 3, 2, 1]
 
-# The bytes to attempt to substitute into the input in the minimization loop
-# These will be replaced in the order of the list
-BYTE_REPLACEMENT_CLASSES: dict[bytes, set[bytes]] = {
-    b'a': {b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z'}, 
-    b'1': {b'0', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'}
-    }
+# A function which takes a byte and returns the byte it should be replaced by during minimization
+# Useful for dealing with character jump-tables which cause differentials to have different traces
+def get_replacement_bytes(to_replace: bytes) -> bytes:
+    if to_replace in (x.encode("utf-8") for x in set(string.ascii_letters)):
+        return b'a'
+    if to_replace in (x.encode("utf-8") for x in set(string.digits)):
+        return b'1'
+    return to_replace
 
 # This is the parse tree class for your programs' output.
 # If DETECT_OUTPUT_DIFFERENTIALS is set to False, then you can leave this as it is.

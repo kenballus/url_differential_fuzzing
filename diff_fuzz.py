@@ -27,6 +27,7 @@ from tqdm import tqdm  # type: ignore
 from config import (
     ParseTree,
     compare_parse_trees,
+    get_replacement_bytes,
     TargetConfig,
     TIMEOUT_TIME,
     TARGET_CONFIGS,
@@ -37,7 +38,6 @@ from config import (
     DELETION_LENGTHS,
     RESULTS_DIR,
     USE_GRAMMAR_MUTATIONS,
-    BYTE_REPLACEMENT_CLASSES,
 )
 
 if USE_GRAMMAR_MUTATIONS:
@@ -180,30 +180,19 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
             else:
                 i -= 1
 
-    i = 0
-    while i < len(result):
-        for possible_substitution in BYTE_REPLACEMENT_CLASSES:
-            for substitutable in BYTE_REPLACEMENT_CLASSES[possible_substitution]:
-                if result[i:i + len(substitutable)] == substitutable:
-                    substituted_form: bytes = result[:i] + possible_substitution + result[i + len(substitutable):]
-                    new_statuses, new_parse_trees = run_targets(substituted_form)
-                    if (
-                        new_statuses == orig_statuses
-                        and (
-                            list(itertools.starmap(compare_parse_trees, itertools.combinations(new_parse_trees, 2)))
-                            if needs_parse_tree_comparison
-                            else [(True,)]
-                        )
-                        == orig_parse_tree_comparisons
-                    ):
-                        result = substituted_form
-                        i += len(possible_substitution)
-                        break
-            else:
-                continue
-            break
-        else:
-            i += 1
+    for i in range(len(result)):
+        substituted_form: bytes = result[:i] + get_replacement_bytes(result[i].to_bytes()) + result[i + 1 :]
+        new_statuses, new_parse_trees = run_targets(substituted_form)
+        if (
+            new_statuses == orig_statuses
+            and (
+                list(itertools.starmap(compare_parse_trees, itertools.combinations(new_parse_trees, 2)))
+                if needs_parse_tree_comparison
+                else [(True,)]
+            )
+            == orig_parse_tree_comparisons
+        ):
+            result = substituted_form
 
     return result
 
