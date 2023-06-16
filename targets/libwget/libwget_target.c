@@ -7,7 +7,7 @@
 static char url_string[MAX_URL_LEN];
 
 int main(void) {
-    fgets(url_string, MAX_URL_LEN, stdin);
+    fread(url_string, 1, MAX_URL_LEN, stdin);
     wget_iri *const parsed_url = wget_iri_parse(url_string, "utf-8");
     if (parsed_url == NULL) {
         return 1;

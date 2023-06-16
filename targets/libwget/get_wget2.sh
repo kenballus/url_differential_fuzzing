@@ -1,6 +1,6 @@
 #!/bin/sh
 
-[ ! -d wget2 ] && \
+[ ! -d wget2 ] || exit 0 && \
 git clone https://gitlab.com/gnuwget/wget2.git && \
 cd wget2 && ./bootstrap && \
 export CC=afl-clang-fast && \
