@@ -28,6 +28,7 @@ from tqdm import tqdm  # type: ignore
 from config import (
     ParseTree,
     compare_parse_trees,
+    get_replacement_bytes,
     TargetConfig,
     TIMEOUT_TIME,
     TARGET_CONFIGS,
@@ -179,6 +180,20 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
                 i -= deletion_length
             else:
                 i -= 1
+
+    for i in range(len(result)):
+        substituted_form: bytes = result[:i] + get_replacement_bytes(result[i].to_bytes()) + result[i + 1 :]
+        new_statuses, new_parse_trees = run_targets(substituted_form)
+        if (
+            new_statuses == orig_statuses
+            and (
+                list(itertools.starmap(compare_parse_trees, itertools.combinations(new_parse_trees, 2)))
+                if needs_parse_tree_comparison
+                else [(True,)]
+            )
+            == orig_parse_tree_comparisons
+        ):
+            result = substituted_form
 
     return result
 
