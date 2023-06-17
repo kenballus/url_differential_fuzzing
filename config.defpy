@@ -83,7 +83,7 @@ def compare_parse_trees(t1: ParseTree | None, t2: ParseTree | None) -> tuple[boo
             t1.userinfo.lower() == t2.userinfo.lower(),
             t1.host.lower() == t2.host.lower(),
             t1.port == t2.port,
-            t1.path == t2.path or all(path in (b"", b"/") for path in (t1.path, t2.path)),
+            t1.path == t2.path or (t1.path.startswith(b'/') and t1.path[1:] == t2.path) or (t2.path.startswith(b'/') and t2.path[1:] == t1.path)),
             t1.query == t2.query,
             t1.fragment == t2.fragment,
         )
