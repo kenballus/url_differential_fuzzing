@@ -181,6 +181,7 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
             else:
                 i -= 1
 
+    # This will break if a replacement changes the length of result.
     for i, c in enumerate(result):
         replacement_byte: bytes = get_replacement_byte(c)
         if replacement_byte == b"":  # No replacement can be made
@@ -450,29 +451,25 @@ if __name__ == "__main__":
     _work_dir: PosixPath = PosixPath("/tmp").joinpath(f"diff_fuzz-{_run_id}")
     os.mkdir(_work_dir)
 
-    _final_results: list[bytes] = []
-    _final_results_info: list[tuple[float, int]] = []
+    _differentials: list[bytes] = []
+    _differentials_info: list[tuple[float, int]] = []
     try:
-        main(_final_results, _final_results_info, _work_dir)
+        main(_differentials, _differentials_info, _work_dir)
     except KeyboardInterrupt:
         pass
-    print("{")
-    print('"Differentials":[')
-    if len(_final_results) != 0:
-        print(
-            ",\n".join(
-                f'{{"File":"{_i}", "Time":"{_b[0]}", "Generation":"{_b[1]}"}}'
-                for _i, _b in enumerate(_final_results_info)
-            )
+    print('{"differentials":\n    [')
+    print(
+        ",\n".join(
+            f'        {{"differential":"{_differential!r}", "time":"{_time}", "generation":"{_generation}"}}'
+            for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
         )
-    else:
-        print("No differentials found! Try increasing ROUGH_DESIRED_QUEUE_LEN.", file=sys.stderr)
-    print("]")
+    )
+    print("    ]")
     print("}")
 
     shutil.rmtree(_work_dir)
 
     os.mkdir(RESULTS_DIR.joinpath(_run_id))
-    for _i, _final_result in enumerate(_final_results):
+    for _i, _final_result in enumerate(_differentials):
         with open(RESULTS_DIR.joinpath(_run_id).joinpath(f"{_i}"), "wb") as _result_file:
             _result_file.write(_final_result)
