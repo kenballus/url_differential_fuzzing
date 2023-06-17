@@ -297,7 +297,7 @@ def split_input_queue(l: list[bytes], num_chunks: int) -> list[list[bytes]]:
 
 
 def main(minimized_differentials: list[bytes], minimized_differentials_info: list[tuple[float, int]], work_dir: PosixPath) -> None:
-    global _start_time
+    start_time: float = time.time()
     # We take minimized_differentials as an argument because we want
     # it to persist even if this function has an uncaught exception.
     assert len(minimized_differentials) == 0
@@ -400,7 +400,7 @@ def main(minimized_differentials: list[bytes], minimized_differentials_info: lis
             ):
                 if new_minimized_fingerprint not in minimized_fingerprints:
                     minimized_differentials.append(minimized_input)
-                    minimized_differentials_info.append((time.time() - _start_time, generation))
+                    minimized_differentials_info.append((time.time() - start_time, generation))
                     minimized_fingerprints.add(new_minimized_fingerprint)
 
         input_queue.clear()
@@ -421,8 +421,6 @@ if __name__ == "__main__":
         print(f"Usage: python3 {sys.argv[0]} run_folder", file=sys.stderr)
         sys.exit(1)
 
-    _start_time = time.time()
-
     _run_id: str = sys.argv[1] if len(sys.argv) >= 2 else str(uuid.uuid4())
     if os.path.exists(RESULTS_DIR.joinpath(_run_id)):
         print(f"Results folder already exists. Overriding.", file=sys.stderr)
@@ -437,7 +435,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     print("{")
-    print(f"\"Runtime\":\"{'{:.2f}'.format(time.time() - _start_time)}\",")
     print('"Differentials":[')
     if len(_final_results) != 0:
         print(
