@@ -26,9 +26,9 @@ from typing import Callable
 from tqdm import tqdm  # type: ignore
 
 from config import (
-    ParseTree,
     compare_parse_trees,
-    get_replacement_bytes,
+    get_replacement_byte,
+    ParseTree,
     TargetConfig,
     TIMEOUT_TIME,
     TARGET_CONFIGS,
@@ -181,8 +181,11 @@ def minimize_differential(bug_inducing_input: bytes) -> bytes:
             else:
                 i -= 1
 
-    for i in range(len(result)):
-        substituted_form: bytes = result[:i] + get_replacement_bytes(result[i].to_bytes()) + result[i + 1 :]
+    for i, c in enumerate(result):
+        replacement_byte: bytes = get_replacement_byte(c)
+        if replacement_byte == b"":  # No replacement can be made
+            continue
+        substituted_form: bytes = result[:i] + replacement_byte + result[i + 1 :]
         new_statuses, new_parse_trees = run_targets(substituted_form)
         if (
             new_statuses == orig_statuses
@@ -311,7 +314,11 @@ def split_input_queue(l: list[bytes], num_chunks: int) -> list[list[bytes]]:
     ]
 
 
-def main(minimized_differentials: list[bytes], minimized_differentials_info: list[tuple[float, int]], work_dir: PosixPath) -> None:
+def main(
+    minimized_differentials: list[bytes],
+    minimized_differentials_info: list[tuple[float, int]],
+    work_dir: PosixPath,
+) -> None:
     start_time: float = time.time()
     # We take minimized_differentials as an argument because we want
     # it to persist even if this function has an uncaught exception.
@@ -438,7 +445,7 @@ if __name__ == "__main__":
 
     _run_id: str = sys.argv[1] if len(sys.argv) >= 2 else str(uuid.uuid4())
     if os.path.exists(RESULTS_DIR.joinpath(_run_id)):
-        print(f"Results folder already exists. Overriding.", file=sys.stderr)
+        print("Results folder already exists. Overriding.", file=sys.stderr)
         shutil.rmtree(RESULTS_DIR.joinpath(_run_id))
     _work_dir: PosixPath = PosixPath("/tmp").joinpath(f"diff_fuzz-{_run_id}")
     os.mkdir(_work_dir)
@@ -454,7 +461,7 @@ if __name__ == "__main__":
     if len(_final_results) != 0:
         print(
             ",\n".join(
-                f"{{\"File\":\"{_i}\", \"Time\":\"{'{:.2f}'.format(_b[0])}\", \"Generation\":\"{_b[1]}\"}}"
+                f'{{"File":"{_i}", "Time":"{_b[0]}", "Generation":"{_b[1]}"}}'
                 for _i, _b in enumerate(_final_results_info)
             )
         )

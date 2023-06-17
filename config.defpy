@@ -41,18 +41,18 @@ ROUGH_DESIRED_QUEUE_LEN: int = 1000
 # The default choice was selected because of UTF-8.
 DELETION_LENGTHS: list[int] = [4, 3, 2, 1]
 
+_ASCII_LETTERS_TO_REPLACE: set[int] = {ord(c) for c in string.ascii_letters} - {ord('a')}
+_ASCII_DIGITS_TO_REPLACE: set[int] = {ord(c) for c in string.digits} - {ord('1')}
+
 # A function which takes a byte and returns the byte it should be replaced by during minimization
-# Useful for dealing with character jump-tables which cause differentials to have different traces
-_ASCII_LETTERS_SET: set[bytes] = set(c.encode("utf-8") for c in string.ascii_letters)
-_ASCII_DIGITS_SET: set[bytes] = set(c.encode("utf-8") for c in string.digits)
-
-
-def get_replacement_bytes(to_replace: bytes) -> bytes:
-    if to_replace in _ASCII_LETTERS_SET:
-        return b"a"
-    if to_replace in _ASCII_DIGITS_SET:
-        return b"1"
-    return to_replace
+# Useful for dealing with character jump-tables that cause duplicate results.
+# If the byte doesn't have a replacement candidate, b'' is returned.
+def get_replacement_byte(to_replace: int) -> bytes:
+    if to_replace in _ASCII_LETTERS_TO_REPLACE:
+        return b'a'
+    if to_replace in _ASCII_DIGITS_TO_REPLACE:
+        return b'1'
+    return b''
 
 
 # This is the parse tree class for your programs' output.
@@ -91,7 +91,7 @@ def compare_parse_trees(t1: ParseTree | None, t2: ParseTree | None) -> tuple[boo
 
 
 # This is the configuration class for each target program.
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class TargetConfig:
     # A unique name for this target
     name: str

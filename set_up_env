@@ -23,7 +23,7 @@ pip3 install --upgrade pip &>/dev/null || { deactivate; fail "Couldn't update pi
 echo "done"
 
 echo -n "Installing dependencies..."
-for pkg in tqdm python-afl black mypy pylint; do
+for pkg in tqdm types-tqdm python-afl black mypy pylint; do
     pip3 install "$pkg" &>/dev/null || { deactivate; fail "Couldn't install remote package $pkg."; }
 done
 echo "done"

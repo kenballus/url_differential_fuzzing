@@ -2,13 +2,7 @@
 
 ## Set-Up
 
-The benchmarking module has to be setup with appropriate empty folders and files. To accomplish this do the following:
-
-From the benchmarking directory
-
-Run:
-
-```make```
+The benchmarking module has to be setup with appropriate empty folders and files. To do this, run `make` in the benchmarking directory.
 
 ## Basic Use
 
@@ -16,21 +10,21 @@ Run:
 
 In the benchmarking_queue file. Tests can be added as followed.
 
-```TestName CommitNumber Time Optional[configfile]```
+```$name $commit_hash $timeout [configfile]```
 
-Each test's results will be saved into ```runs/TestName```
+Each test's results will be saved into `runs/$name`
 
-Each Test will be run on ```CommitNumber``` with config ```configfile```
+Each test will be run on `commit_hash` with config `configfile`
 
-```configfile``` must correspond to the name of a config file in the bench_configs folder
+`configfile` must correspond to the name of a config file in the bench_configs folder
 
 If no config file is specified each test will be run on the same config file as the test before it. If it is the first test it will be run on the current config file.
 
-Each Test will either run out of mutation candidates or will be forcefully ended after ```Time``` seconds have elapsed
+Each Test will either run out of mutation candidates or will be forcefully ended after `timeout` seconds have elapsed.
 
 Example:
 
-```QueueTest cdab061f174edc301a3fab1c78c5440630d0fbe5 QueueTestConfig.py```
+`QueueTest cdab061f174edc301a3fab1c78c5440630d0fbe5 QueueTestConfig.py`
 
 Each test must be followed by a new line character in the file.
 
@@ -46,11 +40,7 @@ BaseCombinedMini e4784f7824696825e987c5c2816c0d07850b6b65 combined.py
 
 ### How to run
 
-run ```./run_benchmarks.sh``` with no arguments
-
-To run in the background
-run ```./run_benchmarks.sh &```
-then run ```disown```
+Run `./run_benchmarks.sh` with no arguments
 
 Progress will be kept in records.txt and results will be saved to a new directory named after the test in the runs directory
 
@@ -60,7 +50,7 @@ Progress will be kept in records.txt and results will be saved to a new director
 
 Creates a graph and a list of bugs for every completed test in the runs directory.
 
-Run ```python analyze.py``` with no arguments
+Run `python analyze.py` with no arguments
 
 Both of these files will be saved in each test's result directory inside the run directory
 
@@ -70,20 +60,18 @@ Creates a graph combining all the choosen tests and creates a text file which sh
 
 In the analysis, bugs will be classified by the currently enabled targets in config.py, in most cases you probably want the enabled targets to correspond to the targets the test was originally run with
 
-Run ```python analyze.py AnalysisName TestName1 TestName2 TestName3...```
+Run `python analyze.py AnalysisName name1 name2 name3...`
 
 Both of the result files will be saved in the analyses directory
 
-```AnalysisName``` is the prefix the resulting analysis files will be saved with 
+`AnalysisName` is the prefix the resulting analysis files will be saved with 
 
-Each ```TestName``` is the name of the test that you want to include in the analysis. Each of these must correspond to a completed test in the runs directory.
+Each `name` is the name of the test that you want to include in the analysis. Each of these must correspond to a completed test in the runs directory.
 
 ### Parser Bug Overlap Analysis
 
 Outputs the number of bugs shared between every combination of parser enabled in config.py
 
-Run ```python parserOverlap.py TestName```
+Run `python parserOverlap.py name`
 
-```TestName``` is the name of a completed test which will provide the set of bugs to test
-
-Outputs to stdout
+`name` is the name of a completed test which will provide the set of bugs to test.
