@@ -4,10 +4,10 @@
 # Add new targets by adding new entries to TARGET_CONFIGS.
 #############################################################################################
 
+import dataclasses
+import string
+import os
 from pathlib import PosixPath
-from typing import List, Dict, Tuple
-from dataclasses import dataclass, field
-from os import environ
 
 # The directory where the seed inputs are
 # The seeds are the files from which all the fuzzing inputs are produced,
@@ -39,22 +39,27 @@ ROUGH_DESIRED_QUEUE_LEN: int = 1000
 
 # The number of bytes deleted at a time in the minimization loop
 # The default choice was selected because of UTF-8.
-DELETION_LENGTHS: List[int] = [4, 3, 2, 1]
+DELETION_LENGTHS: list[int] = [4, 3, 2, 1]
 
 # A function which takes a byte and returns the byte it should be replaced by during minimization
 # Useful for dealing with character jump-tables which cause differentials to have different traces
+_ASCII_LETTERS_SET: set[bytes] = set(c.encode("utf-8") for c in string.ascii_letters)
+_ASCII_DIGITS_SET: set[bytes] = set(c.encode("utf-8") for c in string.digits)
+
+
 def get_replacement_bytes(to_replace: bytes) -> bytes:
-    if to_replace in (x.encode("utf-8") for x in set(string.ascii_letters)):
-        return b'a'
-    if to_replace in (x.encode("utf-8") for x in set(string.digits)):
-        return b'1'
+    if to_replace in _ASCII_LETTERS_SET:
+        return b"a"
+    if to_replace in _ASCII_DIGITS_SET:
+        return b"1"
     return to_replace
+
 
 # This is the parse tree class for your programs' output.
 # If DETECT_OUTPUT_DIFFERENTIALS is set to False, then you can leave this as it is.
 # Otherwise, our suggestion is that your programs output JSON with field values base64-encoded if need be.
 # In that case, this struct should have a single field for each field in that JSON object.
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ParseTree:
     scheme: bytes
     userinfo: bytes
@@ -69,7 +74,7 @@ class ParseTree:
 # During minimization, the result of the function is preserved.
 # If your programs' output is expected to match completely, then leave this as-is.
 # Otherwise, rewrite it to implement an equivalence relation between your parse trees.
-def compare_parse_trees(t1: ParseTree | None, t2: ParseTree | None) -> Tuple[bool, ...]:
+def compare_parse_trees(t1: ParseTree | None, t2: ParseTree | None) -> tuple[bool, ...]:
     return (
         (t1 is t2,)
         if t1 is None or t2 is None
@@ -93,7 +98,7 @@ class TargetConfig:
     # The path to this target's executable
     executable: PosixPath
     # The CLI arguments this target needs
-    cli_args: List[str] = field(default_factory=list)
+    cli_args: list[str] = dataclasses.field(default_factory=list)
     # Whether this executable should be traced.
     # (turning off tracing is useful for untraceable
     #  targets, such as those written in unsupported
@@ -105,11 +110,11 @@ class TargetConfig:
     # Whether this executable needs to run with python-afl (is a python script)
     needs_python_afl: bool = False
     # The environment variables to pass to the executable
-    env: Dict[str, str] = field(default_factory=lambda: dict(environ))
+    env: dict[str, str] = dataclasses.field(default_factory=lambda: dict(os.environ))
 
 
 # Configuration for each fuzzing target
-TARGET_CONFIGS: List[TargetConfig] = [
+TARGET_CONFIGS: list[TargetConfig] = [
     TargetConfig(
         name="ada",
         executable=PosixPath("./targets/ada/ada_target"),
