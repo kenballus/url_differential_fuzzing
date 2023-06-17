@@ -36,7 +36,7 @@ main (){
             echo $commit >> records.txt
             echo $timeout >> records.txt
             echo $tcs >> records.txt
-            echo "-------------------------------------------------------------------" >> records.txt        
+            echo "-------------------------------------------------------------------" >> records.txt
             # Switch to correct commit
             git reset --hard >> records.txt
             git checkout $commit >> records.txt

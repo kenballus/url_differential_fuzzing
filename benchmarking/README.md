@@ -67,11 +67,3 @@ Both of the result files will be saved in the analyses directory
 `AnalysisName` is the prefix the resulting analysis files will be saved with 
 
 Each `name` is the name of the test that you want to include in the analysis. Each of these must correspond to a completed test in the runs directory.
-
-### Parser Bug Overlap Analysis
-
-Outputs the number of bugs shared between every combination of parser enabled in config.py
-
-Run `python parserOverlap.py name`
-
-`name` is the name of a completed test which will provide the set of bugs to test.

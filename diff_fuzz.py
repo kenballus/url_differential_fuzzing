@@ -368,7 +368,7 @@ def main(
                 pool.imap(functools.partial(trace_batch, work_dir), batches),
                 start=[],
             )
-        print("Done!", file=sys.stderr)
+        print("done!", file=sys.stderr)
 
         # Re-run all the targets, this time collecting stdouts and statuses
         with multiprocessing.Pool(processes=num_workers) as pool:
@@ -417,7 +417,7 @@ def main(
                 ),
                 [],
             )
-            print("Done!", file=sys.stderr)
+            print("done!", file=sys.stderr)
             for new_minimized_fingerprint, minimized_input in zip(
                 new_minimized_fingerprints, minimized_inputs
             ):
