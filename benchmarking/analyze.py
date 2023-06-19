@@ -8,8 +8,11 @@ from pathlib import PosixPath
 import matplotlib.pyplot as plt
 import numpy as np
 
-working_dir: str = os.path.dirname(__file__)
-parent_dir = os.path.dirname(working_dir)
+RUNS_DIR = "runs"
+ANALYSES_DIR = "analyses"
+
+working_dir: PosixPath = os.path.dirname(__file__)
+parent_dir: PosixPath = os.path.dirname(working_dir)
 sys.path.append(parent_dir)
 
 os.chdir(parent_dir)
@@ -17,23 +20,23 @@ from diff_fuzz import trace_batch, fingerprint_t
 
 os.chdir(working_dir)
 
+
 # Check that necessary files exist for the given run
-# Returns the data folder for thre run
-def get_data_folder(run_name: str) -> str:
-    data_folder: str = f"runs/{run_name}"
+def assert_data(run_name: str):
+    data_folder: PosixPath = PosixPath(RUNS_DIR).joinpath(run_name)
     print(f"Analyzing: {run_name}", file=sys.stderr)
     if not os.path.isdir(data_folder):
         raise NotADirectoryError(f"{data_folder} is not a directory!")
-    if not os.path.isfile(f"{data_folder}/report.json"):
+    if not os.path.isfile(data_folder.joinpath("report.json")):
         raise FileNotFoundError(f"{data_folder} doesn't have a report file!")
-    if not os.path.isdir(f"{data_folder}/differentials"):
+    if not os.path.isdir(data_folder.joinpath("differentials")):
         raise FileNotFoundError(f"{data_folder} doesn't have a differentials folder!")
-    return data_folder
+
 
 # Plot a run onto a given axis
-def plot_data(run_name: str, data_folder: str, axis: np.ndarray):
+def plot_data(run_name: str, data_folder: PosixPath, axis: np.ndarray):
     # Load up all the differentials from the json
-    with open(f"{data_folder}/report.json", "r", encoding="utf-8") as report_file:
+    with open(data_folder.joinpath("report.json"), "r", encoding="utf-8") as report_file:
         report = json.load(report_file)
     differentials = report["differentials"]
     times: list[float] = []
@@ -51,19 +54,17 @@ def plot_data(run_name: str, data_folder: str, axis: np.ndarray):
     axis[1].plot(np.array(generations), np.array(count))
     axis[1].set_title("Bugs vs Generation")
 
-# Given two empty dictionaries, returns the fingerprints in each run and the bytes those fingerprints correspond to
-def record_bugs(
-    run_name: str,
-    data_folder: str,
-    fingerprints_of_runs: dict[str, list[fingerprint_t]],
-    fingerprints_to_bytes: dict[fingerprint_t, bytes],
-):
+
+def get_fingerprint_differentials(
+    data_folder: PosixPath,
+) -> dict[fingerprint_t, bytes]:
     # Read the bugs from files
     byte_differentials: list[bytes] = []
-    differentials = os.listdir(f"{data_folder}/differentials")
+    differentials_folder: PosixPath = data_folder.joinpath("differentials")
+    differentials = os.listdir(differentials_folder)
     differentials.sort(key=int)
     for diff in differentials:
-        differential_file_name = f"{data_folder}/differentials/{diff}"
+        differential_file_name = differentials_folder.joinpath(diff)
         with open(differential_file_name, "rb") as differential_file:
             byte_differentials.append(differential_file.read())
 
@@ -78,29 +79,36 @@ def record_bugs(
     shutil.rmtree(run_dir)
 
     # Record
+    fingerprints_bytes = {}
     for fingerprint, byte_differential in zip(fingerprints, byte_differentials):
-        fingerprints_to_bytes[fingerprint] = byte_differential
-    fingerprints_of_runs[f"{run_name}"] = fingerprints
+        fingerprints_bytes[fingerprint] = byte_differential
+    return fingerprints_bytes
 
-# Given dictionaries of fingerprints in each run and the bytes those fingerprints correspond to 
-def summarize_common_bugs(
-    fingerprints_of_runs: dict[str, list[fingerprint_t]], fingerprints_to_bytes: dict[fingerprint_t, bytes]
-):
+
+# Given dictionaries of fingerprints in each run and the bytes those fingerprints correspond to
+def summarize_common_bugs(runs_to_analyze: set[str], analysis_file_path: PosixPath):
+    run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
+    for run in runs_to_analyze:
+        run_differentials[run] = get_fingerprint_differentials(PosixPath(RUNS_DIR).joinpath(run))
     # Clear current analysis file
-    analysis_file_path: str = f"analyses/{sys.argv[1]}.txt"
-    open(analysis_file_path, "wb").close() # Clears File
+    open(analysis_file_path, "wb").close()  # Clears File
     # Get list of combos from big to small
-    combos = list(list(run for run, enabled in zip(sys.argv[2:], enables) if enabled) for enables in itertools.product([True, False], repeat=len(sys.argv[2:])))
+    combos = list(
+        list(run for run, enabled in zip(runs_to_analyze, enables) if enabled)
+        for enables in itertools.product([True, False], repeat=len(runs_to_analyze))
+    )
     combos.sort(key=len, reverse=True)
     seen_fingerprints: set[fingerprint_t] = set()
     for combo in combos:
         # Save combo name before editing combo
         combo_name: bytes = bytes(",".join(combo), "utf-8")
         # For each combo build list of common bugs
-        if not combo: break
-        common: set[fingerprint_t] = set(fingerprints_of_runs[combo.pop()])
+        if not combo:
+            break
+        first_run: dict[fingerprint_t, bytes] = run_differentials[combo.pop()]
+        common: set[fingerprint_t] = set(first_run.keys())
         for run in combo:
-            common = common.intersection(set(fingerprints_of_runs[run]))
+            common = common.intersection(run_differentials[run].keys())
         # Take away already used bugs and mark bugs as used up
         common = common - seen_fingerprints
         seen_fingerprints = seen_fingerprints.union(common)
@@ -111,65 +119,71 @@ def summarize_common_bugs(
             comparison_file.write(b"Total: " + bytes(str(len(common)), "utf-8") + b"\n")
             comparison_file.write(b"-------------------------------------------\n")
             comparison_file.write(b"***")
-            comparison_file.write(b"***\n***".join(fingerprints_to_bytes[x] for x in common))
+            comparison_file.write(b"***\n***".join(first_run[x] for x in common))
             comparison_file.write(b"***\n")
 
 
-def build_relative_analysis():
+def build_relative_analysis(analysis_name: str, runs_to_analyze: set[str]):
     # Ensure relative comparisons are all present
-    for run in set(sys.argv[2:]).difference(os.listdir("runs/")):
+    for run in runs_to_analyze.difference(os.listdir(RUNS_DIR)):
         raise FileNotFoundError(f"Couldn't find the data folder for: {run}")
 
     figure, axis = plt.subplots(2)
     figure.tight_layout(h_pad=2)
-    fingerprints_of_runs: dict[str, list[fingerprint_t]] = {}
-    fingerprints_to_bytes: dict[fingerprint_t, bytes] = {}
 
-    for run in set(os.listdir("runs")).intersection(sys.argv[2:]):
-        data_folder: str = get_data_folder(run)
+    run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
+
+    for run in runs_to_analyze:
+        assert_data(run)
+        data_folder: str = PosixPath(RUNS_DIR).joinpath(run)
 
         plot_data(run, data_folder, axis)
 
-        record_bugs(run, data_folder, fingerprints_of_runs, fingerprints_to_bytes)
+        run_differentials[run] = get_fingerprint_differentials(data_folder)
 
     figure.legend(loc="upper left")
-    plt.savefig(f"analyses/{sys.argv[1]}.png", format="png")
+    analysis_file_path: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_name)
+    plt.savefig(analysis_file_path.with_suffix(".png"), format="png")
     plt.close()
 
-    summarize_common_bugs(fingerprints_of_runs, fingerprints_to_bytes)
+    summarize_common_bugs(runs_to_analyze, analysis_file_path.with_suffix(".txt"))
+
 
 # Records all bugs from a run into a summary file
-def summarize_run(data_folder: str):
+def summarize_run(data_folder: PosixPath):
+    # Clear out old summary file
+    summary_file_path: PosixPath = data_folder.joinpath("summary.txt")
+    open(summary_file_path, "wb").close()
     # Get all differential files
-    differentials = os.listdir(f"{data_folder}/differentials")
+    diferentials_folder_path: PosixPath = data_folder.joinpath("differentials")
+    differentials = os.listdir(data_folder.joinpath("differentials"))
     try:
         differentials.sort(key=int)
     except ValueError as e:
-        raise ValueError(f"Issue with {data_folder}/differentials") from e
+        raise ValueError(f"Issue with {diferentials_folder_path}") from e
     for diff_file in differentials:
         # Read the differential bytes from the file
-        differential_file_path = f"{data_folder}/differentials/{diff_file}"
+        differential_file_path = diferentials_folder_path.joinpath(diff_file)
         with open(differential_file_path, "rb") as differential_file:
             differential = differential_file.read()
         # Write them into the summary file
-        with open(f"{data_folder}/summary.txt", "wb") as summary_file:
+        with open(summary_file_path, "ab") as summary_file:
             summary_file.write(bytes(diff_file, "utf-8") + b": \n***")
             summary_file.write(differential)
             summary_file.write(b"***\n")
 
 
-
 def mass_analysis():
     for run in os.listdir("runs"):
         try:
-            data_folder: str = get_data_folder(run)
-
+            assert_data(run)
+            data_folder: PosixPath = PosixPath(RUNS_DIR).joinpath(run)
             figure, axis = plt.subplots(2)
             figure.tight_layout(h_pad=2)
 
             plot_data(run, data_folder, axis)
 
-            plt.savefig(f"{data_folder}/graphs.png", format="png")
+            plt.savefig(data_folder.joinpath("graphs.png"), format="png")
             plt.close()
 
             summarize_run(data_folder)
@@ -178,11 +192,11 @@ def mass_analysis():
 
 
 def main():
-    assert os.path.exists("runs")
-    assert os.path.exists("analyses")
+    assert os.path.exists(RUNS_DIR)
+    assert os.path.exists(ANALYSES_DIR)
 
     if len(sys.argv) > 1:
-        build_relative_analysis()
+        build_relative_analysis(sys.argv[1], set(sys.argv[2:]))
     else:
         mass_analysis()
 

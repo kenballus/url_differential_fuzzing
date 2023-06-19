@@ -1,5 +1,5 @@
-.PHONY: all
-all: analyses bench_configs runs benchmark_queue
+.PHONY: all format typecheck lint
+all: analyses bench_configs runs benchmark_queue format typecheck lint
 
 analyses:
 	mkdir analyses
@@ -12,3 +12,12 @@ runs:
 
 benchmark_queue:
 	touch benchmark_queue
+
+format:
+	black -l 110 *.py
+
+typecheck:
+	mypy analyze.py
+
+lint:
+	pylint --disable=line-too-long,missing-module-docstring,invalid-name,missing-function-docstring,missing-class-docstring,consider-using-with,too-many-locals,too-many-branches *.py
