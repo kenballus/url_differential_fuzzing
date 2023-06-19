@@ -472,7 +472,7 @@ if __name__ == "__main__":
     print('{"differentials":\n    [')
     print(
         ",\n".join(
-            f'        {{"path":"{_run_results_dir.joinpath(str(hash(_differential)))}", "time":"{_time}", "generation":"{_generation}"}}'
+            f'        {{"differential":"{str(base64.b64encode(_differential), "ascii")}", "path":"{_run_results_dir.joinpath(str(hash(_differential)))}", "time":"{_time}", "generation":"{_generation}"}}'
             for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
         )
     )
