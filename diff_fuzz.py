@@ -457,19 +457,24 @@ if __name__ == "__main__":
         main(_differentials, _differentials_info, _work_dir)
     except KeyboardInterrupt:
         pass
+
+    _run_results_dir = RESULTS_DIR.joinpath(_run_id)
+    os.mkdir(_run_results_dir)
+    for _i, _final_differential in enumerate(_differentials):
+        _result_file_path = _run_results_dir.joinpath(str(_i))
+        with open(_result_file_path, "wb") as _result_file:
+            _result_file.write(_final_differential)
+            print("Differential: {0:20} Path: {1}".format(str(_final_differential), str(_result_file_path)), file=sys.stderr)
+
+
     print('{"differentials":\n    [')
     print(
         ",\n".join(
-            f'        {{"differential":"{_differential!r}", "time":"{_time}", "generation":"{_generation}"}}'
-            for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
+            f'        {{"path":"{_run_results_dir.joinpath(str(_i))}", "time":"{_time}", "generation":"{_generation}"}}'
+            for _i, (_time, _generation) in enumerate(_differentials_info)
         )
     )
     print("    ]")
     print("}")
 
     shutil.rmtree(_work_dir)
-
-    os.mkdir(RESULTS_DIR.joinpath(_run_id))
-    for _i, _final_result in enumerate(_differentials):
-        with open(RESULTS_DIR.joinpath(_run_id).joinpath(f"{_i}"), "wb") as _result_file:
-            _result_file.write(_final_result)
