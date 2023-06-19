@@ -460,8 +460,8 @@ if __name__ == "__main__":
 
     _run_results_dir = RESULTS_DIR.joinpath(_run_id)
     os.mkdir(_run_results_dir)
-    for _i, _final_differential in enumerate(_differentials):
-        _result_file_path = _run_results_dir.joinpath(str(_i))
+    for _final_differential in _differentials:
+        _result_file_path = _run_results_dir.joinpath(str(hash(_final_differential)))
         with open(_result_file_path, "wb") as _result_file:
             _result_file.write(_final_differential)
             print(
@@ -472,8 +472,8 @@ if __name__ == "__main__":
     print('{"differentials":\n    [')
     print(
         ",\n".join(
-            f'        {{"path":"{_run_results_dir.joinpath(str(_i))}", "time":"{_time}", "generation":"{_generation}"}}'
-            for _i, (_time, _generation) in enumerate(_differentials_info)
+            f'        {{"path":"{_run_results_dir.joinpath(str(hash(_differential)))}", "time":"{_time}", "generation":"{_generation}"}}'
+            for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
         )
     )
     print("    ]")
