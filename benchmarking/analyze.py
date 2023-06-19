@@ -5,18 +5,18 @@ import shutil
 import itertools
 from pathlib import PosixPath
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 
 RUNS_DIR = "runs"
 ANALYSES_DIR = "analyses"
 
-working_dir: PosixPath = os.path.dirname(__file__)
-parent_dir: PosixPath = os.path.dirname(working_dir)
+working_dir: str = os.path.dirname(__file__)
+parent_dir: str = os.path.dirname(working_dir)
 sys.path.append(parent_dir)
 
 os.chdir(parent_dir)
-from diff_fuzz import trace_batch, fingerprint_t
+from diff_fuzz import trace_batch, fingerprint_t  # type: ignore
 
 os.chdir(working_dir)
 
@@ -135,7 +135,7 @@ def build_relative_analysis(analysis_name: str, runs_to_analyze: set[str]):
 
     for run in runs_to_analyze:
         assert_data(run)
-        data_folder: str = PosixPath(RUNS_DIR).joinpath(run)
+        data_folder: PosixPath = PosixPath(RUNS_DIR).joinpath(run)
 
         plot_data(run, data_folder, axis)
 
