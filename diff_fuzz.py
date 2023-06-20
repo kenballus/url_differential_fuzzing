@@ -465,8 +465,7 @@ if __name__ == "__main__":
         with open(_result_file_path, "wb") as _result_file:
             _result_file.write(_final_differential)
             print(
-                "Differential: {0:20} Path: {1}".format(str(_final_differential), str(_result_file_path)),
-                file=sys.stderr,
+                f"Differential: {str(_final_differential):20} Path: {str(_result_file_path)}", file=sys.stderr
             )
 
     print('{"differentials":\n    [')
