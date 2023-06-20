@@ -27,7 +27,15 @@ main (){
         rm -rf reports
 
         # Save Original Config
-        cp ../config.py original_config.py || echo "No original config, last run's config will be used for analysis"
+        cp ../config.py original_config.py
+        if [ $? -ne 0 ]
+        then
+            echo "No Original Config! Try running make in the main directory."
+            exit 1
+        fi
+
+        # Save original branch
+        org_branch=$(git branch --show-current)
 
         mkdir reports
         echo "Start of new benchmarking run" > records.txt
@@ -50,10 +58,9 @@ main (){
             names_uuids+=("${name}" ${uuid})
             echo "Running: ${name}"
             # Switch to correct commit
-            # TODO: RENABLE
-            # git reset --hard >> records.txt
-            # git checkout $commit >> records.txt
-            # git reset --hard >> records.txt
+            git reset --hard >> records.txt
+            git checkout $commit >> records.txt
+            git reset --hard >> records.txt
             # Do the run
             if [ "$tcs" = "" ]
             then
@@ -67,6 +74,9 @@ main (){
             fi
         done
 
+        # Go back to the original branch
+        git switch $org_branch
+
         # Bring back orginal config
         cp original_config.py ../config.py
 
@@ -76,7 +86,7 @@ main (){
 
         # Clean Up
         rm -rf reports
-        rm original_config.py || rm ../config.py
+        rm original_config.py
     else
         echo "Copying Script into Untracked Version"
         cp run_benchmarks.sh untracked_run_benchmarks.sh
