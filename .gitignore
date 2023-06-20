@@ -8,7 +8,6 @@ python_pkgs/*
 results
 config.py
 benchmarking/analyses
-benchmarking/reports
 benchmarking/bench_configs
 benchmarking/queues
 benchmarking/records.txt
