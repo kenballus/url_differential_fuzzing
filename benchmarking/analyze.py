@@ -147,6 +147,8 @@ def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, 
 
     summarize_common_bugs(runs_to_analyze, analysis_file_path.with_suffix(".txt"), analysis_name)
 
+    print(f"Analysis Path: {analysis_folder}")
+
 
 def main():
     assert os.path.exists(RESULTS_DIR)

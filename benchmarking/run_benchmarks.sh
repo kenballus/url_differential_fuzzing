@@ -23,13 +23,15 @@ do_run () {
 main (){
     if [ "$2" = "untracked" ]
     then
-        # Collect Data
-
         rm -rf /tmp/diff_fuzz* # Just in case temp files were left from a previous run
         rm -rf reports
 
+        # Save Original Config
+        cp ../config.py original_config.py || echo "No original config, last run's config will be used for analysis"
+
         mkdir reports
         echo "Start of new benchmarking run" > records.txt
+        echo "-----Running-----"
         declare -a names_uuids=()
         while read line
         do
@@ -46,27 +48,35 @@ main (){
             echo $uuid >> records.txt
             echo "-------------------------------------------------------------------" >> records.txt
             names_uuids+=("${name}" ${uuid})
+            echo "Running: ${name}"
             # Switch to correct commit
+            # TODO: RENABLE
             # git reset --hard >> records.txt
             # git checkout $commit >> records.txt
             # git reset --hard >> records.txt
             # Do the run
             if [ "$tcs" = "" ]
             then
+                echo "No Config Specified, Copying Original Config into the config file.." >> records.txt
+                cp original_config.py ../config.py
                 do_run ${uuid} ${timeout}
             else
                 echo "Copying ${tcs} into the config file.." >> records.txt
-                cat "bench_configs/${tcs}" > ../config.py
+                cp "bench_configs/${tcs}" ../config.py
                 do_run ${uuid} ${timeout}
             fi
         done < benchmark_queue
 
+        # Bring back orginal config
+        cp original_config.py ../config.py
+
         # Analysis
-        echo ANALYSIS
+        echo "-----Analysis-----"
         python analyze.py "${1}" "${names_uuids[@]}"
 
         # Clean Up
         rm -rf reports
+        rm original_config.py || rm ../config.py
     else
         echo "Copying Script into Untracked Version"
         cp run_benchmarks.sh untracked_run_benchmarks.sh
