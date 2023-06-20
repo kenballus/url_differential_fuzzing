@@ -2,7 +2,7 @@
 
 fail() {
     echo -en '\033[31mError: '
-    echo $@
+    echo "$@"
     echo "Installation has failed."
     echo -en '\033[0m'
     exit 1
@@ -30,8 +30,10 @@ echo "done"
 
 echo "Installing fuzzing targets..."
 for target in targets/*; do
-    echo -n "    Installing $(basename $target)..."
-    cd $target && make &>/dev/null && cd ../.. || { deactivate; fail "Couldn't install local package $target."; }
+    echo -n "    Installing $(basename "$target")..."
+    pushd "$target" || { deactivate; fail "Couldn't pushd into $target."; }
+    make &>/dev/null || { deactivate; fail "Couldn't install local package $target."; }
+    popd || { deactivate; fail "Couldn't popd from $target."; }
     echo "done"
 done
 echo "done"
