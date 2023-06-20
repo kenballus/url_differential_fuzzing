@@ -8,7 +8,8 @@ from pathlib import PosixPath
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 
-RUNS_DIR = "runs"
+RESULTS_DIR = "../results"
+REPORT_DIR = "reports"
 ANALYSES_DIR = "analyses"
 
 working_dir: str = os.path.dirname(__file__)
@@ -22,21 +23,19 @@ os.chdir(working_dir)
 
 
 # Check that necessary files exist for the given run
-def assert_data(run_name: str):
-    data_folder: PosixPath = PosixPath(RUNS_DIR).joinpath(run_name)
-    print(f"Analyzing: {run_name}", file=sys.stderr)
-    if not os.path.isdir(data_folder):
-        raise NotADirectoryError(f"{data_folder} is not a directory!")
-    if not os.path.isfile(data_folder.joinpath("report.json")):
-        raise FileNotFoundError(f"{data_folder} doesn't have a report file!")
-    if not os.path.isdir(data_folder.joinpath("differentials")):
-        raise FileNotFoundError(f"{data_folder} doesn't have a differentials folder!")
+def assert_data(uuid: str):
+    if not os.path.isdir(PosixPath(REPORT_DIR)):
+        raise FileNotFoundError("Report Directory doesn't exist!")
+    if not os.path.isfile(PosixPath(REPORT_DIR).joinpath(f"{uuid}_report.json")):
+        raise FileNotFoundError(f"{uuid} doesn't have a report file!")
+    if not os.path.isdir(PosixPath(RESULTS_DIR).joinpath(uuid)):
+        raise FileNotFoundError(f"{uuid} doesn't have a differentials folder!")
 
 
 # Plot a run onto a given axis
-def plot_data(run_name: str, data_folder: PosixPath, axis: np.ndarray):
+def plot_data(run_name: str, report_file_path: PosixPath, axis: np.ndarray):
     # Load up all the differentials from the json
-    with open(data_folder.joinpath("report.json"), "r", encoding="utf-8") as report_file:
+    with open(report_file_path, "r", encoding="utf-8") as report_file:
         report = json.load(report_file)
     differentials = report["differentials"]
     times: list[float] = []
@@ -56,11 +55,10 @@ def plot_data(run_name: str, data_folder: PosixPath, axis: np.ndarray):
 
 
 def get_fingerprint_differentials(
-    data_folder: PosixPath,
+    differentials_folder: PosixPath,
 ) -> dict[fingerprint_t, bytes]:
     # Read the bugs from files
     byte_differentials: list[bytes] = []
-    differentials_folder: PosixPath = data_folder.joinpath("differentials")
     differentials = os.listdir(differentials_folder)
     differentials.sort(key=int)
     for diff in differentials:
@@ -86,15 +84,15 @@ def get_fingerprint_differentials(
 
 
 # Given dictionaries of fingerprints in each run and the bytes those fingerprints correspond to
-def summarize_common_bugs(runs_to_analyze: set[str], analysis_file_path: PosixPath):
+def summarize_common_bugs(runs_to_analyze: set[tuple[str, str]], analysis_file_path: PosixPath):
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
-    for run in runs_to_analyze:
-        run_differentials[run] = get_fingerprint_differentials(PosixPath(RUNS_DIR).joinpath(run))
+    for run_name, uuid in runs_to_analyze:
+        run_differentials[run_name] = get_fingerprint_differentials(PosixPath(RESULTS_DIR).joinpath(uuid))
     # Clear current analysis file
     open(analysis_file_path, "wb").close()  # Clears File
     # Get list of combos from big to small
     combos = list(
-        list(run for run, enabled in zip(runs_to_analyze, enables) if enabled)
+        list(run for (run, _), enabled in zip(runs_to_analyze, enables) if enabled)
         for enables in itertools.product([True, False], repeat=len(runs_to_analyze))
     )
     combos.sort(key=len, reverse=True)
@@ -107,8 +105,8 @@ def summarize_common_bugs(runs_to_analyze: set[str], analysis_file_path: PosixPa
             break
         first_run: dict[fingerprint_t, bytes] = run_differentials[combo.pop()]
         common: set[fingerprint_t] = set(first_run.keys())
-        for run in combo:
-            common = common.intersection(run_differentials[run].keys())
+        for run_name in combo:
+            common = common.intersection(run_differentials[run_name].keys())
         # Take away already used bugs and mark bugs as used up
         common = common - seen_fingerprints
         seen_fingerprints = seen_fingerprints.union(common)
@@ -123,23 +121,14 @@ def summarize_common_bugs(runs_to_analyze: set[str], analysis_file_path: PosixPa
             comparison_file.write(b"***\n")
 
 
-def build_relative_analysis(analysis_name: str, runs_to_analyze: set[str]):
-    # Ensure relative comparisons are all present
-    for run in runs_to_analyze.difference(os.listdir(RUNS_DIR)):
-        raise FileNotFoundError(f"Couldn't find the data folder for: {run}")
-
+def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, str]]):
     figure, axis = plt.subplots(2)
     figure.tight_layout(h_pad=2)
 
-    run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
-
-    for run in runs_to_analyze:
-        assert_data(run)
-        data_folder: PosixPath = PosixPath(RUNS_DIR).joinpath(run)
-
-        plot_data(run, data_folder, axis)
-
-        run_differentials[run] = get_fingerprint_differentials(data_folder)
+    for run_name, uuid in runs_to_analyze:
+        print(f"Analyzing: {run_name}")
+        assert_data(uuid)
+        plot_data(run_name, PosixPath(REPORT_DIR).joinpath(f"{uuid}_report.json"), axis)
 
     figure.legend(loc="upper left")
     analysis_file_path: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_name)
@@ -177,7 +166,7 @@ def mass_analysis():
     for run in os.listdir("runs"):
         try:
             assert_data(run)
-            data_folder: PosixPath = PosixPath(RUNS_DIR).joinpath(run)
+            data_folder: PosixPath = PosixPath(RESULTS_DIR).joinpath(run)
             figure, axis = plt.subplots(2)
             figure.tight_layout(h_pad=2)
 
@@ -192,11 +181,20 @@ def mass_analysis():
 
 
 def main():
-    assert os.path.exists(RUNS_DIR)
+    assert os.path.exists(RESULTS_DIR)
     assert os.path.exists(ANALYSES_DIR)
 
-    if len(sys.argv) > 1:
-        build_relative_analysis(sys.argv[1], set(sys.argv[2:]))
+    relative_analysis: bool = len(sys.argv) > 1
+
+    # Check that args are correct
+    if relative_analysis:
+        assert len(sys.argv) > 3
+        assert len(sys.argv) % 2 == 0
+
+    if relative_analysis:
+        build_relative_analysis(
+            sys.argv[1], set((sys.argv[i], sys.argv[i + 1]) for i in range(2, len(sys.argv)) if i % 2 == 0)
+        )
     else:
         mass_analysis()
 
