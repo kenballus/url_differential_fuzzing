@@ -138,65 +138,18 @@ def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, 
     summarize_common_bugs(runs_to_analyze, analysis_file_path.with_suffix(".txt"))
 
 
-# Records all bugs from a run into a summary file
-def summarize_run(data_folder: PosixPath):
-    # Clear out old summary file
-    summary_file_path: PosixPath = data_folder.joinpath("summary.txt")
-    open(summary_file_path, "wb").close()
-    # Get all differential files
-    diferentials_folder_path: PosixPath = data_folder.joinpath("differentials")
-    differentials = os.listdir(data_folder.joinpath("differentials"))
-    try:
-        differentials.sort(key=int)
-    except ValueError as e:
-        raise ValueError(f"Issue with {diferentials_folder_path}") from e
-    for diff_file in differentials:
-        # Read the differential bytes from the file
-        differential_file_path = diferentials_folder_path.joinpath(diff_file)
-        with open(differential_file_path, "rb") as differential_file:
-            differential = differential_file.read()
-        # Write them into the summary file
-        with open(summary_file_path, "ab") as summary_file:
-            summary_file.write(bytes(diff_file, "utf-8") + b": \n***")
-            summary_file.write(differential)
-            summary_file.write(b"***\n")
-
-
-def mass_analysis():
-    for run in os.listdir("runs"):
-        try:
-            assert_data(run)
-            data_folder: PosixPath = PosixPath(RESULTS_DIR).joinpath(run)
-            figure, axis = plt.subplots(2)
-            figure.tight_layout(h_pad=2)
-
-            plot_data(run, data_folder, axis)
-
-            plt.savefig(data_folder.joinpath("graphs.png"), format="png")
-            plt.close()
-
-            summarize_run(data_folder)
-        except FileNotFoundError as e:
-            print(e)
-
-
 def main():
     assert os.path.exists(RESULTS_DIR)
     assert os.path.exists(ANALYSES_DIR)
-
-    relative_analysis: bool = len(sys.argv) > 1
+    assert os.path.exists(REPORT_DIR)
 
     # Check that args are correct
-    if relative_analysis:
-        assert len(sys.argv) > 3
-        assert len(sys.argv) % 2 == 0
+    assert len(sys.argv) > 3
+    assert len(sys.argv) % 2 == 0
 
-    if relative_analysis:
-        build_relative_analysis(
-            sys.argv[1], set((sys.argv[i], sys.argv[i + 1]) for i in range(2, len(sys.argv)) if i % 2 == 0)
-        )
-    else:
-        mass_analysis()
+    build_relative_analysis(
+        sys.argv[1], set((sys.argv[i], sys.argv[i + 1]) for i in range(2, len(sys.argv)) if i % 2 == 0)
+    )
 
 
 if __name__ == "__main__":
