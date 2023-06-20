@@ -1,5 +1,5 @@
 .PHONY: all format typecheck lint
-all: analyses bench_configs benchmark_queue format typecheck lint
+all: analyses bench_configs queues format typecheck lint
 
 analyses:
 	mkdir analyses
@@ -7,8 +7,8 @@ analyses:
 bench_configs:
 	mkdir bench_configs
 
-benchmark_queue:
-	touch benchmark_queue
+queues:
+	mkdir queues
 
 format:
 	black -l 110 *.py

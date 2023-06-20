@@ -33,7 +33,7 @@ main (){
         echo "Start of new benchmarking run" > records.txt
         echo "-----Running-----"
         declare -a names_uuids=()
-        while read line
+        while read line || [ -n "$line" ]
         do
             name=$(echo $line | cut -f 1 -d ,)
             commit=$(echo $line | cut -f 2 -d ,)
@@ -65,7 +65,7 @@ main (){
                 cp "bench_configs/${tcs}" ../config.py
                 do_run ${uuid} ${timeout}
             fi
-        done < benchmark_queue
+        done
 
         # Bring back orginal config
         cp original_config.py ../config.py
