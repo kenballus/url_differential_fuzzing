@@ -1,71 +1,55 @@
-# TODO: Update README
-
 # Benchmarking Instructions
 
 ## Set-Up
 
-The benchmarking module has to be setup with appropriate empty folders and files. To do this, run `make` in the benchmarking directory.
+The benchmarking module has to be setup with appropriate empty folders. To do this, run `make` in the benchmarking directory.
 
 ## Basic Use
 
-### Benchmarking Queue
+### Benchmarking Queues
 
-In the benchmarking_queue file. Tests can be added as followed.
+Before tests can be run the user must first create a benchmarking queue file.
 
-```$name $commit_hash $timeout [configfile]```
+Tests can be added to a queue as follows:
 
-Each test's results will be saved into `runs/$name`
+```$name,$commit_hash,$timeout,[configfile]```
 
-Each test will be run on `commit_hash` with config `configfile`
+Each test will be run on `commit_hash` with config `configfile`.
 
-`configfile` must correspond to the name of a config file in the bench_configs folder
+`configfile` must correspond to the name of a config file in the bench_configs folder.
 
-If no config file is specified each test will be run on the same config file as the test before it. If it is the first test it will be run on the current config file.
+If no config file is specified then the test will be run on the current config file.
 
-Each Test will either run out of mutation candidates or will be forcefully ended after `timeout` seconds have elapsed.
+Each test will be forcefully ended after `timeout` seconds have elapsed or will run out of mutation candidates.
 
-Example:
-
-`QueueTest cdab061f174edc301a3fab1c78c5440630d0fbe5 QueueTestConfig.py`
-
-Each test must be followed by a new line character in the file.
-
-A complete benchmarking_queue file should be in the same format as follows:
+Complete Benchmarking Queue File Example:
 
 ```
-BaseMultipleBytes e7823b0c4cba1d79901f3db50560dcaad8eb90f4 largeByte.py
-TestMultipleBytes aa517f562e3138a751a0cf6aa0731134a7fedb1d largeByte.py
-TestCombinedMini 7cfc15c1ec954da782daa5a7f69d51439c1262ac combined.py
-BaseCombinedMini e4784f7824696825e987c5c2816c0d07850b6b65 combined.py
-
+Test A,043f804572d88cfd7be1dc7247bef28d875b0d60,30,rfc_url.py
+Test B,043f804572d88cfd7be1dc7247bef28d875b0d60,30
+Test C,b7aa710177b48a680e97d9851b34bcab366626cf,30,rfc_url.py
 ```
 
 ### How to run
 
-Run `./run_benchmarks.sh` with no arguments
+Run `./run_benchmarks.sh analysis_name < benchmarking_queue`.
 
-Progress will be kept in records.txt and results will be saved to a new directory named after the test in the runs directory
+`analysis_name` will be the label for the final analysis graph and text output.
 
-## Analysis
+`benchmarking_queue` should be a completed benchmarking queue file that contains all the tests you want to compare.
 
-### Test Specific Analysis
+It is suggested you keep benchmarking queue files in the queues directory but they can be kept anywhere.
 
-Creates a graph and a list of bugs for every completed test in the runs directory.
+### Output
 
-Run `python analyze.py` with no arguments
+Progress will be kept in records.txt and analysis results will be saved in the analyses directory under a uuid.
 
-Both of these files will be saved in each test's result directory inside the run directory
+The uuid for the analysis will be printed to stdout after the program runs.
 
-### Cross Test Analysis
+The uuid folder will contain two items, a .png and a .txt file.
 
-Creates a graph combining all the choosen tests and creates a text file which shows all the bugs that were common between the different tests grouped by the set of tests that they were found in
+The .png file is a graph which compares all the queued tests. It has a figure for bugs over time and a figure for bugs over generations.
 
-In the analysis, bugs will be classified by the currently enabled targets in config.py, in most cases you probably want the enabled targets to correspond to the targets the test was originally run with
+The .txt file groups every found bug by the largest set of queued tests that commonly found it.
 
-Run `python analyze.py AnalysisName name1 name2 name3...`
-
-Both of the result files will be saved in the analyses directory
-
-`AnalysisName` is the prefix the resulting analysis files will be saved with 
-
-Each `name` is the name of the test that you want to include in the analysis. Each of these must correspond to a completed test in the runs directory.
+Bugs are classified according to the current config
