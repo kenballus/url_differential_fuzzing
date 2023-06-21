@@ -88,22 +88,26 @@ def get_fingerprint_differentials(
 
 # Given dictionaries of fingerprints in each run and the bytes those fingerprints correspond to
 def summarize_common_bugs(
-    runs_to_analyze: set[tuple[str, str]], analysis_file_path: PosixPath, analysis_name: str
+    runs_to_analyze: set[tuple[str, str]],
+    summary_file_path: PosixPath,
+    machine_file_path: PosixPath,
+    analysis_name: str,
 ):
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
     for run_name, run_uuid in runs_to_analyze:
         run_differentials[run_name] = get_fingerprint_differentials(PosixPath(RESULTS_DIR).joinpath(run_uuid))
-    # Setup analysis file
-    with open(analysis_file_path, "wb") as analysis_file:
+    # Setup analysis file and machine file
+    with open(summary_file_path, "wb") as analysis_file:
         analysis_file.write(f"Analysis: {analysis_name}\n".encode("utf-8"))
+    with open(machine_file_path, "w", encoding="utf-8") as machine_file:
+        machine_file.write(f"{','.join(run_name for run_name, _ in runs_to_analyze)},count\n")
     # Get list of combos from big to small
-    combos = list(
-        list(run for (run, _), enabled in zip(runs_to_analyze, enables) if enabled)
-        for enables in itertools.product([True, False], repeat=len(runs_to_analyze))
-    )
-    combos.sort(key=len, reverse=True)
+    enables_list = list(itertools.product([True, False], repeat=len(runs_to_analyze)))
+    enables_list.sort(key=sum, reverse=True)
     seen_fingerprints: set[fingerprint_t] = set()
-    for combo in combos:
+    for enables in enables_list:
+        # Create combo from enabled runs
+        combo = list(run for (run, _), enabled in zip(runs_to_analyze, enables) if enabled)
         # Save combo name before editing combo
         combo_name: bytes = bytes(",".join(combo), "utf-8")
         # For each combo build list of common bugs
@@ -113,17 +117,20 @@ def summarize_common_bugs(
         common: set[fingerprint_t] = set(first_run.keys())
         for run_name in combo:
             common = common.intersection(run_differentials[run_name].keys())
+        # Write to the machine readable file
+        with open(machine_file_path, "a", encoding="utf-8") as machine_file:
+            machine_file.write(f"{','.join(str(enable) for enable in enables)},{len(common)}\n")
         # Take away already used bugs and mark bugs as used up
-        common = common - seen_fingerprints
-        seen_fingerprints = seen_fingerprints.union(common)
-        # Write to the file in a readable byte format
-        with open(analysis_file_path, "ab") as comparison_file:
+        unused_common = common - seen_fingerprints
+        seen_fingerprints = seen_fingerprints.union(unused_common)
+        # Write to the summary file in a readable byte format
+        with open(summary_file_path, "ab") as comparison_file:
             comparison_file.write(b"-------------------------------------------\n")
             comparison_file.write(combo_name + b"\n")
-            comparison_file.write(b"Total: " + bytes(str(len(common)), "utf-8") + b"\n")
+            comparison_file.write(b"Total: " + bytes(str(len(unused_common)), "utf-8") + b"\n")
             comparison_file.write(b"-------------------------------------------\n")
             comparison_file.write(b"***")
-            comparison_file.write(b"***\n***".join(first_run[x] for x in common))
+            comparison_file.write(b"***\n***".join(first_run[x] for x in unused_common))
             comparison_file.write(b"***\n")
 
 
@@ -139,13 +146,17 @@ def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, 
     analysis_uuid: str = str(uuid.uuid4())
     analysis_folder: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_uuid)
     os.mkdir(analysis_folder)
-    analysis_file_path: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_uuid).joinpath(analysis_uuid)
 
     figure.legend(loc="upper left")
-    plt.savefig(analysis_file_path.with_suffix(".png"), format="png")
+    plt.savefig(analysis_folder.joinpath("graph").with_suffix(".png"), format="png")
     plt.close()
 
-    summarize_common_bugs(runs_to_analyze, analysis_file_path.with_suffix(".txt"), analysis_name)
+    summarize_common_bugs(
+        runs_to_analyze,
+        analysis_folder.joinpath("summary").with_suffix(".txt"),
+        analysis_folder.joinpath("machine").with_suffix(".csv"),
+        analysis_name,
+    )
 
     print(f"Analysis Path: {analysis_folder}")
 
