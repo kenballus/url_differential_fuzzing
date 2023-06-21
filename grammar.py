@@ -82,7 +82,7 @@ USERINFO_RE: re.Pattern = re.compile(USERINFO_PAT)
 #           / "1" 2DIGIT            ; 100-199
 #           / "2" %x30-34 DIGIT     ; 200-249
 #           / "25" %x30-35          ; 250-255
-DEC_OCTET_PAT: str = r"(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])"
+DEC_OCTET_PAT: str = r"(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])"
 
 # IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
 IPV4ADDRESS_PAT: str = rf"(?:{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT}\.{DEC_OCTET_PAT})"
@@ -259,3 +259,56 @@ def helper(parse_tree: SubPattern) -> bytes:
 
 def generate_random_matching_input(pattern: bytes | str) -> bytes:
     return helper(re_parse(pattern))
+
+
+def is_grammar_full(groupdict: dict[str, bytes | Any]) -> bool:
+    if any(
+        groupdict[rule_name] is not None for rule_name in ("path_absolute", "path_empty", "path_rootless")
+    ):
+        return all(groupdict[rule_name] is not None for rule_name in ("query", "fragment"))
+    if groupdict["host"] is not None:
+        return all(
+            groupdict[rule_name] is not None for rule_name in ("userinfo", "port", "query", "fragment")
+        )
+    return True
+
+
+def generate_grammar_insertion(groupdict: dict[str, bytes | Any]) -> tuple[str, bytes]:
+    rules_to_fill: list[str] = []
+    if any(
+        groupdict[rule_name] is not None for rule_name in ("path_absolute", "path_empty", "path_rootless")
+    ):
+        rules_to_fill = list(rule_name for rule_name in ("query", "fragment") if groupdict[rule_name] is None)
+    elif groupdict["host"] is not None:
+        rules_to_fill = list(
+            rule_name
+            for rule_name in ("userinfo", "port", "query", "fragment")
+            if groupdict[rule_name] is None
+        )
+
+    assert len(rules_to_fill) > 0
+
+    rule_name = random.choice(rules_to_fill)
+    return (rule_name, generate_random_matching_input(grammar_dict[rule_name]))
+
+
+def serialize(groupdict: dict[str, bytes | Any]) -> bytes:
+    serialization = b""
+
+    if groupdict["scheme"] is not None:
+        serialization += groupdict["scheme"] + b":"
+
+    if any(groupdict[rule_name] is not None for rule_name in ("userinfo", "host", "port")):
+        serialization += b"//"
+        serialization += groupdict["userinfo"] + b"@" if groupdict["userinfo"] is not None else b""
+        serialization += groupdict["host"] if groupdict["host"] is not None else b""
+        serialization += b":" + groupdict["port"] if groupdict["port"] is not None else b""
+
+    serialization += groupdict["path_absolute"] if groupdict["path_absolute"] is not None else b""
+    serialization += groupdict["path_abempty"] if groupdict["path_abempty"] is not None else b""
+    serialization += groupdict["path_rootless"] if groupdict["path_rootless"] is not None else b""
+    serialization += groupdict["path_empty"] if groupdict["path_empty"] is not None else b""
+    serialization += b"?" + groupdict["query"] if groupdict["query"] is not None else b""
+    serialization += b"#" + groupdict["fragment"] if groupdict["fragment"] is not None else b""
+
+    return serialization

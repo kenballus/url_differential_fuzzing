@@ -20,7 +20,7 @@ import shutil
 import base64
 import time
 from pathlib import PosixPath
-from typing import Callable
+from typing import Callable, Any
 
 
 from tqdm import tqdm  # type: ignore
@@ -43,7 +43,7 @@ from config import (
 
 if USE_GRAMMAR_MUTATIONS:
     try:
-        from grammar import generate_random_matching_input, grammar_re, grammar_dict  # type: ignore
+        from grammar import generate_random_matching_input, generate_grammar_insertion, is_grammar_full, serialize, grammar_re, grammar_dict  # type: ignore
     except ModuleNotFoundError:
         print(
             "`grammar.py` not found. Either make one or set USE_GRAMMAR_MUTATIONS to False", file=sys.stderr
@@ -73,6 +73,26 @@ def grammar_regenerate(b: bytes) -> bytes:
     return m.string[:start] + new_rule_match + m.string[end:]
 
 
+def grammar_insert(b: bytes) -> bytes:
+    m: re.Match[bytes] | None = re.match(grammar_re, b)
+    assert m is not None
+    deserialized: dict[str, bytes | Any] = m.groupdict()
+    rule_name, new_rule_match = generate_grammar_insertion(deserialized)
+    deserialized[rule_name] = new_rule_match
+    return serialize(deserialized)
+
+
+def grammar_delete(b: bytes) -> bytes:
+    m: re.Match[bytes] | None = re.match(grammar_re, b)
+    assert m is not None
+    deserialized: dict[str, bytes | Any] = m.groupdict()
+    rule_name: str = random.choice(
+        [rule_name for rule_name, rule_match in m.groupdict().items() if rule_match is not None]
+    )
+    deserialized[rule_name] = None
+    return serialize(deserialized)
+
+
 def byte_change(b: bytes) -> bytes:
     index: int = random.randint(0, len(b) - 1)
     return b[:index] + bytes([random.randint(0, 255)]) + b[index + 1 :]
@@ -95,8 +115,12 @@ def mutate(b: bytes) -> bytes:
     if len(b) > 1:
         mutators.append(byte_delete)
     if USE_GRAMMAR_MUTATIONS:
-        if re.match(grammar_re, b) is not None:
+        m = re.match(grammar_re, b)
+        if m is not None:
             mutators.append(grammar_regenerate)
+            mutators.append(grammar_delete)
+            if not is_grammar_full(m.groupdict()):
+                mutators.append(grammar_insert)
 
     return random.choice(mutators)(b)
 
