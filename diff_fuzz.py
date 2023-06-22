@@ -43,7 +43,7 @@ from config import (
 
 if USE_GRAMMAR_MUTATIONS:
     try:
-        from grammar import generate_random_matching_input, generate_grammar_insertion, is_grammar_full, serialize, grammar_re, grammar_dict  # type: ignore
+        from grammar import generate_random_matching_input, generate_grammar_insertion, count_grammar, serialize, grammar_re, grammar_dict  # type: ignore
     except ModuleNotFoundError:
         print(
             "`grammar.py` not found. Either make one or set USE_GRAMMAR_MUTATIONS to False", file=sys.stderr
@@ -117,9 +117,12 @@ def mutate(b: bytes) -> bytes:
     if USE_GRAMMAR_MUTATIONS:
         m = re.match(grammar_re, b)
         if m is not None:
-            mutators.append(grammar_regenerate)
-            mutators.append(grammar_delete)
-            if not is_grammar_full(m.groupdict()):
+            fields_filled, fields_avaliable = count_grammar(m.groupdict())
+            if fields_filled > 0:
+                mutators.append(grammar_regenerate)
+            if fields_filled > 1:
+                mutators.append(grammar_delete)
+            if fields_avaliable > 0:
                 mutators.append(grammar_insert)
 
     return random.choice(mutators)(b)

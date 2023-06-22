@@ -322,10 +322,14 @@ def get_rules_to_fill(groupdict: dict[str, bytes | Any]) -> list[str]:
     return rules_to_fill
 
 
-def is_grammar_full(groupdict: dict[str, bytes | Any]) -> bool:
+# Returns the number of fields with contents and the number of fields avaliable to fill
+def count_grammar(groupdict: dict[str, bytes | Any]) -> tuple[int, int]:
     groupdict = normalize_match(groupdict)
 
-    return len(get_rules_to_fill(groupdict)) == 0
+    return (
+        len(list(rule_name for rule_name, rule_match in groupdict.items() if rule_match)),
+        len(get_rules_to_fill(groupdict)),
+    )
 
 
 def generate_grammar_insertion(groupdict: dict[str, bytes | Any]) -> tuple[str, bytes]:
