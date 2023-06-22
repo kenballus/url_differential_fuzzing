@@ -304,25 +304,7 @@ def normalize_match(groupdict: dict[str, bytes | Any]) -> dict[str, bytes | Any]
     return normalized_dict
 
 
-def is_grammar_full(groupdict: dict[str, bytes | Any]) -> bool:
-    groupdict = normalize_match(groupdict)
-
-    if any(
-        groupdict[rule_name] is not None
-        for rule_name in ("path_absolute", "path_empty", "path_rootless", "path_noscheme")
-    ):
-        return all(groupdict[rule_name] is not None for rule_name in ("scheme", "query", "fragment"))
-    if groupdict["host"] is not None:
-        return all(
-            groupdict[rule_name] is not None
-            for rule_name in ("scheme", "userinfo", "port", "query", "fragment")
-        )
-    return True
-
-
-def generate_grammar_insertion(groupdict: dict[str, bytes | Any]) -> tuple[str, bytes]:
-    groupdict = normalize_match(groupdict)
-
+def get_rules_to_fill(groupdict: dict[str, bytes | Any]) -> list[str]:
     rules_to_fill: list[str] = []
     if any(
         groupdict[rule_name] is not None
@@ -337,6 +319,19 @@ def generate_grammar_insertion(groupdict: dict[str, bytes | Any]) -> tuple[str, 
             for rule_name in ("scheme", "userinfo", "port", "query", "fragment")
             if groupdict[rule_name] is None
         )
+    return rules_to_fill
+
+
+def is_grammar_full(groupdict: dict[str, bytes | Any]) -> bool:
+    groupdict = normalize_match(groupdict)
+
+    return len(get_rules_to_fill(groupdict)) == 0
+
+
+def generate_grammar_insertion(groupdict: dict[str, bytes | Any]) -> tuple[str, bytes]:
+    groupdict = normalize_match(groupdict)
+
+    rules_to_fill: list[str] = get_rules_to_fill(groupdict)
 
     assert len(rules_to_fill) > 0
 
