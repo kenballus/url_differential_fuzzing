@@ -57,6 +57,9 @@ SEGMENT_PAT: str = rf"(?:{PCHAR_PAT}*)"
 # segment-nz = 1*pchar
 SEGMENT_NZ_PAT: str = rf"(?:{PCHAR_PAT}+)"
 
+# segment-nz-nc = 1*( unreserved / pct-encoded / sub-delims / "@" )
+SEGMENT_NZ_NC_PAT: str = rf"(?:(?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT}|@)+)"
+
 # path-absolute = "/" [ segment-nz *( "/" segment ) ]
 PATH_ABSOLUTE_PAT: str = rf"(?P<path_absolute>/(?:{SEGMENT_NZ_PAT}(?:/{SEGMENT_PAT})*)?)"
 PATH_ABSOLUTE_RE: re.Pattern = re.compile(PATH_ABSOLUTE_PAT)
@@ -72,6 +75,10 @@ PATH_ROOTLESS_RE: re.Pattern = re.compile(PATH_ROOTLESS_PAT)
 # path-abempty = *( "/" segment )
 PATH_ABEMPTY_PAT: str = rf"(?P<path_abempty>(?:/{SEGMENT_PAT})*)"
 PATH_ABEMPTY_RE: re.Pattern = re.compile(PATH_ABEMPTY_PAT)
+
+# path-noscheme = segment-nz-nc *( "/" segment )
+PATH_NOSCHEME_PAT: str = rf"(?P<path_noscheme>{SEGMENT_NZ_NC_PAT}(?:/{SEGMENT_PAT})*)"
+PATH_NOSCHEME_RE: re.Pattern = re.compile(PATH_NOSCHEME_PAT)
 
 # userinfo = *( unreserved / pct-encoded / sub-delims / ":" )
 USERINFO_PAT: str = rf"(?P<userinfo>(?:{UNRESERVED_PAT}|{PCT_ENCODED_PAT}|{SUB_DELIMS_PAT}|:)*)"
@@ -159,9 +166,30 @@ HIER_PART_RE: re.Pattern = re.compile(HIER_PART_PAT)
 
 # URI = scheme ":" hier-part [ "?" query ] [ "#" fragment ]
 URI_PAT: str = rf"(?:{SCHEME_PAT}:{HIER_PART_PAT}(?:\?{QUERY_PAT})?(?:#{FRAGMENT_PAT})?)"
-URI_RE: re.Pattern = re.compile(URI_PAT.encode("ASCII"))
+URI_RE: re.Pattern = re.compile(URI_PAT)
 
-grammar_re = URI_RE
+# relative-part = "//" authority path-abempty
+#                  / path-absolute
+#                  / path-noscheme
+#                  / path-empty
+REL_PART_PAT: str = (
+    rf"(?:(?://{AUTHORITY_PAT}{PATH_ABEMPTY_PAT})|{PATH_ABSOLUTE_PAT}|{PATH_NOSCHEME_PAT}|{PATH_EMPTY_PAT})"
+)
+REL_PART_RE: re.Pattern = re.compile(REL_PART_PAT)
+
+REL_REF_EXT: str = "_rel"
+
+# relative-ref  = relative-part [ "?" query ] [ "#" fragment ]
+REL_REF_PAT: str = rf"(?:{REL_PART_PAT}(?:\?{QUERY_PAT})?(?:#{FRAGMENT_PAT})?)".replace(
+    ">", f"{REL_REF_EXT}>"
+)
+REL_REF_RE: re.Pattern = re.compile(REL_REF_PAT)
+
+# URI-reference = URI / relative-ref
+URI_REF_PAT = rf"^(?:{URI_PAT}|{REL_REF_PAT})$"
+URI_REF_RE: re.Pattern = re.compile(URI_REF_PAT.encode("ASCII"))
+
+grammar_re = URI_REF_RE
 grammar_dict: Dict[str, bytes] = {
     "scheme": SCHEME_PAT.encode("ASCII"),
     "userinfo": USERINFO_PAT.encode("ASCII"),
@@ -171,9 +199,13 @@ grammar_dict: Dict[str, bytes] = {
     "path_absolute": PATH_ABSOLUTE_PAT.encode("ASCII"),
     "path_rootless": PATH_ROOTLESS_PAT.encode("ASCII"),
     "path_empty": PATH_EMPTY_PAT.encode("ASCII"),
+    "path_noscheme": PATH_NOSCHEME_PAT.encode("ASCII"),
     "query": QUERY_PAT.encode("ASCII"),
     "fragment": FRAGMENT_PAT.encode("ASCII"),
 }
+
+for reg_rule_name in grammar_dict.copy():
+    grammar_dict[f"{reg_rule_name}{REL_REF_EXT}"] = grammar_dict[reg_rule_name]
 
 
 # This relies on the internal workings of the re module, so don't be surprised if it crashes or doesn't
@@ -261,28 +293,48 @@ def generate_random_matching_input(pattern: bytes | str) -> bytes:
     return helper(re_parse(pattern))
 
 
+def normalize_match(groupdict: dict[str, bytes | Any]) -> dict[str, bytes | Any]:
+    normalized_dict: dict[str, bytes | Any] = {}
+    for rule_name, rule_match in groupdict.items():
+        normalized_name: str = rule_name.removesuffix(REL_REF_EXT)
+        if normalized_name not in normalized_dict:
+            normalized_dict[normalized_name] = rule_match
+        elif normalized_dict[normalized_name] is None:
+            normalized_dict[normalized_name] = rule_match
+    return normalized_dict
+
+
 def is_grammar_full(groupdict: dict[str, bytes | Any]) -> bool:
+    groupdict = normalize_match(groupdict)
+
     if any(
-        groupdict[rule_name] is not None for rule_name in ("path_absolute", "path_empty", "path_rootless")
+        groupdict[rule_name] is not None
+        for rule_name in ("path_absolute", "path_empty", "path_rootless", "path_noscheme")
     ):
-        return all(groupdict[rule_name] is not None for rule_name in ("query", "fragment"))
+        return all(groupdict[rule_name] is not None for rule_name in ("scheme", "query", "fragment"))
     if groupdict["host"] is not None:
         return all(
-            groupdict[rule_name] is not None for rule_name in ("userinfo", "port", "query", "fragment")
+            groupdict[rule_name] is not None
+            for rule_name in ("scheme", "userinfo", "port", "query", "fragment")
         )
     return True
 
 
 def generate_grammar_insertion(groupdict: dict[str, bytes | Any]) -> tuple[str, bytes]:
+    groupdict = normalize_match(groupdict)
+
     rules_to_fill: list[str] = []
     if any(
-        groupdict[rule_name] is not None for rule_name in ("path_absolute", "path_empty", "path_rootless")
+        groupdict[rule_name] is not None
+        for rule_name in ("path_absolute", "path_empty", "path_rootless", "path_noscheme")
     ):
-        rules_to_fill = list(rule_name for rule_name in ("query", "fragment") if groupdict[rule_name] is None)
+        rules_to_fill = list(
+            rule_name for rule_name in ("scheme", "query", "fragment") if groupdict[rule_name] is None
+        )
     elif groupdict["host"] is not None:
         rules_to_fill = list(
             rule_name
-            for rule_name in ("userinfo", "port", "query", "fragment")
+            for rule_name in ("scheme", "userinfo", "port", "query", "fragment")
             if groupdict[rule_name] is None
         )
 
@@ -293,21 +345,24 @@ def generate_grammar_insertion(groupdict: dict[str, bytes | Any]) -> tuple[str, 
 
 
 def serialize(groupdict: dict[str, bytes | Any]) -> bytes:
+    groupdict = normalize_match(groupdict)
+
     serialization = b""
 
-    if groupdict["scheme"] is not None:
-        serialization += groupdict["scheme"] + b":"
+    serialization += groupdict["scheme"] + b":" if groupdict["scheme"] is not None else b""
 
     if any(groupdict[rule_name] is not None for rule_name in ("userinfo", "host", "port")):
         serialization += b"//"
-        serialization += groupdict["userinfo"] + b"@" if groupdict["userinfo"] is not None else b""
-        serialization += groupdict["host"] if groupdict["host"] is not None else b""
-        serialization += b":" + groupdict["port"] if groupdict["port"] is not None else b""
+
+    serialization += groupdict["userinfo"] + b"@" if groupdict["userinfo"] is not None else b""
+    serialization += groupdict["host"] if groupdict["host"] is not None else b""
+    serialization += b":" + groupdict["port"] if groupdict["port"] is not None else b""
 
     serialization += groupdict["path_absolute"] if groupdict["path_absolute"] is not None else b""
     serialization += groupdict["path_abempty"] if groupdict["path_abempty"] is not None else b""
     serialization += groupdict["path_rootless"] if groupdict["path_rootless"] is not None else b""
     serialization += groupdict["path_empty"] if groupdict["path_empty"] is not None else b""
+    serialization += groupdict["path_noscheme"] if groupdict["path_noscheme"] is not None else b""
     serialization += b"?" + groupdict["query"] if groupdict["query"] is not None else b""
     serialization += b"#" + groupdict["fragment"] if groupdict["fragment"] is not None else b""
 
