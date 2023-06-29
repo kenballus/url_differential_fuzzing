@@ -318,6 +318,7 @@ def split_input_queue(l: list[bytes], num_chunks: int) -> list[list[bytes]]:
 def main(
     minimized_differentials: list[bytes],
     minimized_differentials_info: list[tuple[float, int]],
+    coverage_info: tuple[list[tuple[int, float, int]], ...],
     work_dir: PosixPath,
 ) -> None:
     start_time: float = time.time()
@@ -345,6 +346,8 @@ def main(
     # Keep these fingerprints in a set.
     # An input is worth mutation if its fingerprint is new.
     seen_fingerprints: set[fingerprint_t] = set()
+
+    seen_edges: tuple[set[int], ...] = tuple(set() for _ in TARGET_CONFIGS)
 
     # This is the set of fingerprints that correspond with minimized differentials.
     # Whenever we minimize a differential into an input with a fingerprint not in this set,
@@ -400,6 +403,12 @@ def main(
                     differentials.append(current_input)
                 else:
                     mutation_candidates.append(current_input)
+                # Record new Edges
+                for tc_edges, new_edges in zip(seen_edges, fingerprint):
+                    tc_edges.update(new_edges)
+
+        for tc_edges, tc_cov_list in zip(seen_edges, coverage_info):
+            tc_cov_list.append((len(tc_edges), time.time() - start_time, generation))
 
         # Minimize differentials
         with multiprocessing.Pool(processes=num_workers) as pool:
@@ -433,7 +442,8 @@ def main(
         print(
             f"End of generation {generation}.\n"
             + f"Differentials:\t\t{len(minimized_differentials)}\n"
-            + f"Mutation candidates:\t{len(mutation_candidates)}",
+            + f"Mutation candidates:\t{len(mutation_candidates)}\n"
+            + f"Coverage:\t\t\t{tuple(len(x) for x in seen_edges)}",
             file=sys.stderr,
         )
         generation += 1
@@ -453,8 +463,9 @@ if __name__ == "__main__":
 
     _differentials: list[bytes] = []
     _differentials_info: list[tuple[float, int]] = []
+    _coverage_info: tuple[list[tuple[int, float, int]], ...] = tuple([] for _ in TARGET_CONFIGS)
     try:
-        main(_differentials, _differentials_info, _work_dir)
+        main(_differentials, _differentials_info, _coverage_info, _work_dir)
     except KeyboardInterrupt:
         pass
 
@@ -467,8 +478,23 @@ if __name__ == "__main__":
             print(
                 f"Differential: {str(_final_differential):20} Path: {str(_result_file_path)}", file=sys.stderr
             )
+    print("{")
 
-    print('{"differentials":\n    [')
+    print('"coverage":\n    {')
+    print(
+        ",\n".join(
+            f'        "{_tc.name}":\n            [\n'
+            + ",\n".join(
+                f'                {{"edges":"{_edges}","time":"{_time}","generation":"{_generation}"}}'
+                for (_edges, _time, _generation) in _coverage_info[_i]
+            )
+            + "\n            ]"
+            for _i, _tc in enumerate(TARGET_CONFIGS)
+        )
+    )
+    print("    },")
+
+    print('"differentials":\n    [')
     print(
         ",\n".join(
             f'        {{"differential":"{str(base64.b64encode(_differential), "ascii")}", "path":"{_run_results_dir.joinpath(str(hash(_differential)))}", "time":"{_time}", "generation":"{_generation}"}}'
