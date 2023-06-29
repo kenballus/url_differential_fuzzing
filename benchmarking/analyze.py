@@ -34,7 +34,7 @@ def assert_data(run_uuid: str):
 
 
 # Plot a run onto a given axis
-def plot_data(run_name: str, report_file_path: PosixPath, axis: np.ndarray):
+def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray):
     # Load up all the differentials from the json
     with open(report_file_path, "r", encoding="utf-8") as report_file:
         report = json.load(report_file)
@@ -134,6 +134,39 @@ def summarize_common_bugs(
             comparison_file.write(b"***\n")
 
 
+def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_folder: PosixPath):
+    # Gather The Data
+    edge_data: dict[str, tuple[tuple[list[int], list[float], list[int]], ...]] = {}
+
+    for i, (_, run_uuid) in enumerate(runs_to_analyze):
+        report = json.loads(
+            open(PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json"), "r", encoding="utf-8").read()
+        )
+        coverage = report["coverage"]
+        for target_name in coverage.keys():
+            if target_name not in edge_data:
+                edge_data[target_name] = tuple(([], [], []) for _ in runs_to_analyze)
+            for data_point in coverage[target_name]:
+                edge_data[target_name][i][0].append(int(data_point["edges"]))
+                edge_data[target_name][i][1].append(float(data_point["time"]))
+                edge_data[target_name][i][2].append(int(data_point["generation"]))
+
+    # Build The Graphs
+    for target_name, run_lists_allruns in edge_data.items():
+        figure, axis = plt.subplots(2, 1, constrained_layout=True)
+        figure.suptitle(f"{analysis_name} - {target_name}", fontsize=16)
+        axis[0].set_xlabel("Time (s)")
+        axis[0].set_ylabel("Edges")
+        axis[1].set_xlabel("Generations")
+        axis[1].set_ylabel("Edges")
+        for i, run_lists in enumerate(run_lists_allruns):
+            axis[0].plot(np.array(run_lists[1]), np.array(run_lists[0]), label=runs_to_analyze[i][0])
+            axis[1].plot(np.array(run_lists[2]), np.array(run_lists[0]))
+        figure.legend(loc="upper left")
+        plt.savefig(analysis_folder.joinpath(f"{target_name}").with_suffix(".png"), format="png")
+        plt.close()
+
+
 def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, str]]):
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
@@ -141,14 +174,14 @@ def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, 
     for run_name, run_uuid in runs_to_analyze:
         print(f"Analyzing: {run_name}")
         assert_data(run_uuid)
-        plot_data(run_name, PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json"), axis)
+        plot_bugs(run_name, PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json"), axis)
 
     analysis_uuid: str = str(uuid.uuid4())
     analysis_folder: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_uuid)
     os.mkdir(analysis_folder)
 
     figure.legend(loc="upper left")
-    plt.savefig(analysis_folder.joinpath("graph").with_suffix(".png"), format="png")
+    plt.savefig(analysis_folder.joinpath("bug_graph").with_suffix(".png"), format="png")
     plt.close()
 
     summarize_common_bugs(
@@ -157,6 +190,8 @@ def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, 
         analysis_folder.joinpath("machine").with_suffix(".csv"),
         analysis_name,
     )
+
+    build_edge_graphs(analysis_name, list(runs_to_analyze), analysis_folder)
 
     print(f"Analysis Path: {analysis_folder}")
 
