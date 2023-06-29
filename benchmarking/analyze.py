@@ -87,7 +87,7 @@ def get_fingerprint_differentials(
 
 
 # Given dictionaries of fingerprints in each run and the bytes those fingerprints correspond to
-def summarize_common_bugs(
+def build_overlap_reports(
     runs_to_analyze: set[tuple[str, str]],
     summary_file_path: PosixPath,
     machine_file_path: PosixPath,
@@ -152,22 +152,22 @@ def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]]
                 edge_data[target_name][i][2].append(int(data_point["generation"]))
 
     # Build The Graphs
-    for target_name, run_lists_allruns in edge_data.items():
+    for target_name, runs in edge_data.items():
         figure, axis = plt.subplots(2, 1, constrained_layout=True)
         figure.suptitle(f"{analysis_name} - {target_name}", fontsize=16)
         axis[0].set_xlabel("Time (s)")
         axis[0].set_ylabel("Edges")
         axis[1].set_xlabel("Generations")
         axis[1].set_ylabel("Edges")
-        for i, run_lists in enumerate(run_lists_allruns):
-            axis[0].plot(np.array(run_lists[1]), np.array(run_lists[0]), label=runs_to_analyze[i][0])
-            axis[1].plot(np.array(run_lists[2]), np.array(run_lists[0]))
+        for i, run in enumerate(runs):
+            axis[0].plot(np.array(run[1]), np.array(run[0]), label=runs_to_analyze[i][0])
+            axis[1].plot(np.array(run[2]), np.array(run[0]))
         figure.legend(loc="upper left")
-        plt.savefig(analysis_folder.joinpath(f"{target_name}").with_suffix(".png"), format="png")
+        plt.savefig(analysis_folder.joinpath(f"edges_{target_name}").with_suffix(".png"), format="png")
         plt.close()
 
 
-def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, str]]):
+def build_bug_graph(analysis_name: str, runs_to_analyze: set[tuple[str, str]], analysis_folder: PosixPath):
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
@@ -176,24 +176,9 @@ def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, 
         assert_data(run_uuid)
         plot_bugs(run_name, PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json"), axis)
 
-    analysis_uuid: str = str(uuid.uuid4())
-    analysis_folder: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_uuid)
-    os.mkdir(analysis_folder)
-
     figure.legend(loc="upper left")
     plt.savefig(analysis_folder.joinpath("bug_graph").with_suffix(".png"), format="png")
     plt.close()
-
-    summarize_common_bugs(
-        runs_to_analyze,
-        analysis_folder.joinpath("summary").with_suffix(".txt"),
-        analysis_folder.joinpath("machine").with_suffix(".csv"),
-        analysis_name,
-    )
-
-    build_edge_graphs(analysis_name, list(runs_to_analyze), analysis_folder)
-
-    print(f"Analysis Path: {analysis_folder}")
 
 
 def main():
@@ -205,9 +190,27 @@ def main():
     assert len(sys.argv) > 3
     assert len(sys.argv) % 2 == 0
 
-    build_relative_analysis(
-        sys.argv[1], set((sys.argv[i], sys.argv[i + 1]) for i in range(2, len(sys.argv)) if i % 2 == 0)
+    analysis_name: str = sys.argv[1]
+    runs_to_analyze: set[tuple[str, str]] = set(
+        (sys.argv[i], sys.argv[i + 1]) for i in range(2, len(sys.argv)) if i % 2 == 0
     )
+
+    analysis_uuid: str = str(uuid.uuid4())
+    analysis_folder: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_uuid)
+    os.mkdir(analysis_folder)
+
+    build_bug_graph(analysis_name, runs_to_analyze, analysis_folder)
+
+    build_edge_graphs(analysis_name, list(runs_to_analyze), analysis_folder)
+
+    build_overlap_reports(
+        runs_to_analyze,
+        analysis_folder.joinpath("overlap_summary").with_suffix(".txt"),
+        analysis_folder.joinpath("overlap_machine").with_suffix(".csv"),
+        analysis_name,
+    )
+
+    print(f"Analysis Path: {analysis_folder}")
 
 
 if __name__ == "__main__":
