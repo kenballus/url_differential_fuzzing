@@ -481,18 +481,19 @@ if __name__ == "__main__":
     print("{")
 
     print('"coverage":\n    {')
-    print(
-        ",\n".join(
-            f'        "{_tc.name}":\n            [\n'
-            + ",\n".join(
+    for _i, _tc in enumerate(TARGET_CONFIGS):
+        if _i != 0:
+            print(",")
+        print(f'        "{_tc.name}":\n            [')
+        print(
+            ",\n".join(
                 f'                {{"edges":"{_edges}","time":"{_time}","generation":"{_generation}"}}'
                 for (_edges, _time, _generation) in _coverage_info[_i]
-            )
-            + "\n            ]"
-            for _i, _tc in enumerate(TARGET_CONFIGS)
+            ),
+            end="",
         )
-    )
-    print("    },")
+        print("\n            ]", end="")
+    print("\n    },")
 
     print('"differentials":\n    [')
     print(
