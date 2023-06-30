@@ -1,11 +1,5 @@
 #!/bin/bash
 
-if [ $# -gt 2 ] || [ $# -lt 1 ]
-then
-echo "Use: run_benchmarks.sh name_of_analysis"
-exit 1
-fi
-
 # Go to the correct folder
 cd $(dirname $0)
 
@@ -20,8 +14,18 @@ do_run () {
     cd benchmarking
 }
 
+use_statement() {
+    echo "Use: run_benchmarks.sh -n name_of_analysis [-b] [-e] [-v] < queue_file"
+    echo "  -n name_of_analysis -> The Name to attribute to the resulting Analysis"
+    echo "  -b -> Enables the Creation of Bug Graph in Analysis"
+    echo "  -e -> Enables the Creation of Edge Graphs in Analysis"
+    echo "  -v -> Enables the Creation of Overlap Reports in Analysis"
+    echo "  queue_file -> The File to draw runs of the fuzzer from"
+    exit 1
+}
+
 main (){
-    if [ "$2" = "untracked" ]
+    if [ $(basename $0) = "untracked_run_benchmarks.sh" ]
     then
         rm -rf /tmp/diff_fuzz* # Just in case temp files were left from a previous run
         rm -rf reports
@@ -57,10 +61,10 @@ main (){
             echo "-------------------------------------------------------------------" >> records.txt
             names_uuids+=("${name}" ${uuid})
             echo "Running: ${name}"
-            # Switch to correct commit
-            git reset --hard >> records.txt
-            git checkout $commit >> records.txt
-            git reset --hard >> records.txt
+            # Switch to correct commit TODO: reenable
+            # git reset --hard >> records.txt
+            # git checkout $commit >> records.txt
+            # git reset --hard >> records.txt
             # Do the run
             if [ "$tcs" = "" ]
             then
@@ -75,24 +79,56 @@ main (){
         done
 
         # Go back to the original branch
-        git switch $org_branch
+        # git switch $org_branch
 
         # Bring back orginal config
         cp original_config.py ../config.py
 
         # Analysis
         echo "-----Analysis-----"
-        python analyze.py "${1}" "${names_uuids[@]}"
+        python analyze.py $@ "${names_uuids[@]}"
 
         # Clean Up
-        rm -rf reports
-        rm original_config.py
+        # rm -rf reports
+        # rm original_config.py
     else
         echo "Copying Script into Untracked Version"
         cp run_benchmarks.sh untracked_run_benchmarks.sh
-        sh untracked_run_benchmarks.sh "${1}" untracked
+        sh untracked_run_benchmarks.sh $@
         rm untracked_run_benchmarks.sh
     fi
 }
+
+named=0
+test_enabled=0
+# Parse Options
+while getopts "bven:" opt; do
+    case ${opt} in
+    n )
+    named=1
+    ;;
+    [b,v,e] )
+    test_enabled=1
+    ;;
+    \? )
+    echo "Invalid option: $OPTARG" 1>&2
+    ;;
+    : )
+    echo "Invalid option: $OPTARG requires an argument" 1>&2
+    ;;
+    esac
+done
+
+if [ $named -eq 0 ]; then
+    echo "The analysis must be given a name via -n name_of_analysis"
+    echo ""
+    use_statement
+fi
+
+if [ $test_enabled -eq 0 ]; then
+    echo "[-b] [-e] or [-v] must be enabled, otherwise no analysis will be performed!"
+    echo ""
+    use_statement
+fi
 
 main "$@"

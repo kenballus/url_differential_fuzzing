@@ -4,6 +4,7 @@ import json
 import shutil
 import itertools
 import uuid
+import argparse
 from pathlib import PosixPath
 
 import matplotlib.pyplot as plt  # type: ignore
@@ -93,6 +94,7 @@ def build_overlap_reports(
     machine_file_path: PosixPath,
     analysis_name: str,
 ):
+    print("Building Overlap Reports...")
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
     for run_name, run_uuid in runs_to_analyze:
         run_differentials[run_name] = get_fingerprint_differentials(PosixPath(RESULTS_DIR).joinpath(run_uuid))
@@ -135,6 +137,7 @@ def build_overlap_reports(
 
 
 def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_folder: PosixPath):
+    print("Building Edge Graphs...")
     # Gather The Data
     edge_data: dict[str, tuple[tuple[list[int], list[float], list[int]], ...]] = {}
 
@@ -168,11 +171,11 @@ def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]]
 
 
 def build_bug_graph(analysis_name: str, runs_to_analyze: set[tuple[str, str]], analysis_folder: PosixPath):
+    print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
     for run_name, run_uuid in runs_to_analyze:
-        print(f"Analyzing: {run_name}")
         assert_data(run_uuid)
         plot_bugs(run_name, PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json"), axis)
 
@@ -186,29 +189,41 @@ def main():
     assert os.path.exists(ANALYSES_DIR)
     assert os.path.exists(REPORT_DIR)
 
-    # Check that args are correct
-    assert len(sys.argv) > 3
-    assert len(sys.argv) % 2 == 0
 
-    analysis_name: str = sys.argv[1]
+    # Retrieve Arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-n", type=str, default="Analysis", help="The Name of the Analysis to Create")
+    parser.add_argument("-b", help="Enable Creation of Bug Graph", action="store_true")
+    parser.add_argument("-v", help="Enable Creation of Overlap Reports", action="store_true")
+    parser.add_argument("-e", help="Enable Creation of Edge graphs", action="store_true")
+    args, inputs = parser.parse_known_args()
+
+    # ensure at least one option is enabled
+    assert any((args.b, args.v, args.e))
+
+    # Check that args are correct
+    assert len(inputs) > 3
+    assert len(inputs) % 2 == 0
+
     runs_to_analyze: set[tuple[str, str]] = set(
-        (sys.argv[i], sys.argv[i + 1]) for i in range(2, len(sys.argv)) if i % 2 == 0
+        (inputs[i], inputs[i + 1]) for i in range(len(inputs)) if i % 2 == 0
     )
 
     analysis_uuid: str = str(uuid.uuid4())
     analysis_folder: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_uuid)
     os.mkdir(analysis_folder)
 
-    build_bug_graph(analysis_name, runs_to_analyze, analysis_folder)
-
-    build_edge_graphs(analysis_name, list(runs_to_analyze), analysis_folder)
-
-    build_overlap_reports(
-        runs_to_analyze,
-        analysis_folder.joinpath("overlap_summary").with_suffix(".txt"),
-        analysis_folder.joinpath("overlap_machine").with_suffix(".csv"),
-        analysis_name,
-    )
+    if args.b:
+        build_bug_graph(args.n, runs_to_analyze, analysis_folder)
+    if args.e:
+        build_edge_graphs(args.n, list(runs_to_analyze), analysis_folder)
+    if args.v:
+        build_overlap_reports(
+            runs_to_analyze,
+            analysis_folder.joinpath("overlap_summary").with_suffix(".txt"),
+            analysis_folder.joinpath("overlap_machine").with_suffix(".csv"),
+            args.n,
+        )
 
     print(f"Analysis Path: {analysis_folder}")
 
