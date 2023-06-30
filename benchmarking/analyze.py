@@ -189,7 +189,6 @@ def main():
     assert os.path.exists(ANALYSES_DIR)
     assert os.path.exists(REPORT_DIR)
 
-
     # Retrieve Arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", type=str, default="Analysis", help="The Name of the Analysis to Create")

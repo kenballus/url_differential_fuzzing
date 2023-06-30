@@ -61,10 +61,10 @@ main (){
             echo "-------------------------------------------------------------------" >> records.txt
             names_uuids+=("${name}" ${uuid})
             echo "Running: ${name}"
-            # Switch to correct commit TODO: reenable
-            # git reset --hard >> records.txt
-            # git checkout $commit >> records.txt
-            # git reset --hard >> records.txt
+            # Switch to correct commit
+            git reset --hard >> records.txt
+            git checkout $commit >> records.txt
+            git reset --hard >> records.txt
             # Do the run
             if [ "$tcs" = "" ]
             then
@@ -79,7 +79,7 @@ main (){
         done
 
         # Go back to the original branch
-        # git switch $org_branch
+        git switch $org_branch
 
         # Bring back orginal config
         cp original_config.py ../config.py
@@ -89,8 +89,8 @@ main (){
         python analyze.py $@ "${names_uuids[@]}"
 
         # Clean Up
-        # rm -rf reports
-        # rm original_config.py
+        rm -rf reports
+        rm original_config.py
     else
         echo "Copying Script into Untracked Version"
         cp run_benchmarks.sh untracked_run_benchmarks.sh
