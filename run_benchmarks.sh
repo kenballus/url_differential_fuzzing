@@ -2,7 +2,7 @@
 
 if [ $# -gt 2 ] || [ $# -lt 1 ]
 then
-echo "Use: run_benchmarks.sh name_of_analysis"
+echo "Usage: ./run_benchmarks.sh name_of_analysis"
 exit 1
 fi
 
@@ -30,7 +30,7 @@ main (){
         cp ../config.py original_config.py
         if [ $? -ne 0 ]
         then
-            echo "No Original Config! Try running make in the main directory."
+            echo "No original config! Try running make in the main directory."
             exit 1
         fi
 
@@ -58,13 +58,11 @@ main (){
             names_uuids+=("${name}" ${uuid})
             echo "Running: ${name}"
             # Switch to correct commit
-            git reset --hard >> records.txt
             git checkout $commit >> records.txt
-            git reset --hard >> records.txt
             # Do the run
             if [ "$tcs" = "" ]
             then
-                echo "No Config Specified, Copying Original Config into the config file.." >> records.txt
+                echo "No config specified; copying original config into the config file.." >> records.txt
                 cp original_config.py ../config.py
                 do_run ${uuid} ${timeout}
             else
@@ -88,7 +86,7 @@ main (){
         rm -rf reports
         rm original_config.py
     else
-        echo "Copying Script into Untracked Version"
+        echo "Copying script into untracked version"
         cp run_benchmarks.sh untracked_run_benchmarks.sh
         sh untracked_run_benchmarks.sh "${1}" untracked
         rm untracked_run_benchmarks.sh

@@ -9,6 +9,8 @@ from pathlib import PosixPath
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 
+from diff_fuzz import trace_batch, fingerprint_t
+
 RESULTS_DIR = "../results"
 REPORT_DIR = "reports"
 ANALYSES_DIR = "analyses"
@@ -18,13 +20,12 @@ parent_dir: str = os.path.dirname(working_dir)
 sys.path.append(parent_dir)
 
 os.chdir(parent_dir)
-from diff_fuzz import trace_batch, fingerprint_t  # type: ignore
 
 os.chdir(working_dir)
 
 
 # Check that necessary files exist for the given run
-def assert_data(run_uuid: str):
+def assert_data(run_uuid: str) -> None:
     if not os.path.isdir(PosixPath(REPORT_DIR)):
         raise FileNotFoundError("Report Directory doesn't exist!")
     if not os.path.isfile(PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json")):
@@ -34,7 +35,7 @@ def assert_data(run_uuid: str):
 
 
 # Plot a run onto a given axis
-def plot_data(run_name: str, report_file_path: PosixPath, axis: np.ndarray):
+def plot_data(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> None:
     # Load up all the differentials from the json
     with open(report_file_path, "r", encoding="utf-8") as report_file:
         report = json.load(report_file)
@@ -92,7 +93,7 @@ def summarize_common_bugs(
     summary_file_path: PosixPath,
     machine_file_path: PosixPath,
     analysis_name: str,
-):
+) -> None:
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
     for run_name, run_uuid in runs_to_analyze:
         run_differentials[run_name] = get_fingerprint_differentials(PosixPath(RESULTS_DIR).joinpath(run_uuid))
@@ -134,7 +135,7 @@ def summarize_common_bugs(
             comparison_file.write(b"***\n")
 
 
-def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, str]]):
+def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, str]]) -> None:
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
@@ -161,7 +162,7 @@ def build_relative_analysis(analysis_name: str, runs_to_analyze: set[tuple[str, 
     print(f"Analysis Path: {analysis_folder}")
 
 
-def main():
+def main() -> None:
     assert os.path.exists(RESULTS_DIR)
     assert os.path.exists(ANALYSES_DIR)
     assert os.path.exists(REPORT_DIR)
