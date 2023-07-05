@@ -12,7 +12,6 @@ import multiprocessing
 import random
 import itertools
 import os
-import re
 import json
 import functools
 import uuid
@@ -43,7 +42,7 @@ from config import (
 
 if USE_GRAMMAR_MUTATIONS:
     try:
-        from grammar import generate_random_matching_input, grammar_re, grammar_dict  # type: ignore
+        from grammar import GRAMMAR_MUTATORS
     except ModuleNotFoundError:
         print(
             "`grammar.py` not found. Either make one or set USE_GRAMMAR_MUTATIONS to False", file=sys.stderr
@@ -60,20 +59,9 @@ assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 fingerprint_t = tuple[frozenset[int], ...]
 
 
-def grammar_regenerate(b: bytes) -> bytes:
-    # Assumes that b matches the grammar_re.
-    # Returns a mutated b with a portion regenerated.
-    m: re.Match[bytes] | None = re.match(grammar_re, b)
-    assert m is not None
-    rule_name: str = random.choice(
-        [rule_name for rule_name, rule_match in m.groupdict().items() if rule_match is not None]
-    )
-    new_rule_match: bytes = generate_random_matching_input(grammar_dict[rule_name])
-    start, end = m.span(rule_name)
-    return m.string[:start] + new_rule_match + m.string[end:]
-
-
-def byte_change(b: bytes) -> bytes:
+def byte_replace(b: bytes) -> bytes:
+    if len(b) == 0:
+        raise ValueError("Mutation precondition didn't hold.")
     index: int = random.randint(0, len(b) - 1)
     return b[:index] + bytes([random.randint(0, 255)]) + b[index + 1 :]
 
@@ -84,21 +72,27 @@ def byte_insert(b: bytes) -> bytes:
 
 
 def byte_delete(b: bytes) -> bytes:
+    if len(b) <= 1:
+        raise ValueError("Mutation precondition didn't hold.")
     index: int = random.randint(0, len(b) - 1)
     return b[:index] + b[index + 1 :]
 
 
-def mutate(b: bytes) -> bytes:
-    mutators: list[Callable[[bytes], bytes]] = [byte_insert]
-    if len(b) > 0:
-        mutators.append(byte_change)
-    if len(b) > 1:
-        mutators.append(byte_delete)
-    if USE_GRAMMAR_MUTATIONS:
-        if re.match(grammar_re, b) is not None:
-            mutators.append(grammar_regenerate)
+MUTATORS: list[Callable[[bytes], bytes]] = [byte_replace, byte_insert, byte_delete] + (
+    GRAMMAR_MUTATORS if USE_GRAMMAR_MUTATIONS else []
+)
 
-    return random.choice(mutators)(b)
+
+def mutate(b: bytes) -> bytes:
+    mutators: list[Callable[[bytes], bytes]] = MUTATORS.copy()
+    while len(mutators) != 0:
+        try:
+            mutator: Callable[[bytes], bytes] = random.choice(mutators)
+            return mutator(b)
+        except ValueError:
+            mutators.remove(mutator)
+    print("Input {b!r} cannot be mutated.", file=sys.stderr)
+    sys.exit(1)
 
 
 def parse_tracer_output(tracer_output: bytes) -> frozenset[int]:
