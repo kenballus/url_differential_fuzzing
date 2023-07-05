@@ -12,7 +12,6 @@ import multiprocessing
 import random
 import itertools
 import os
-import re
 import json
 import functools
 import uuid
@@ -20,7 +19,7 @@ import shutil
 import base64
 import time
 from pathlib import PosixPath
-from typing import Callable, Any
+from typing import Callable
 
 
 from tqdm import tqdm  # type: ignore
@@ -43,7 +42,7 @@ from config import (
 
 if USE_GRAMMAR_MUTATIONS:
     try:
-        from grammar import generate_random_matching_input, generate_grammar_insertion, count_grammar, serialize, grammar_re, grammar_dict  # type: ignore
+        from grammar import GRAMMAR_MUTATORS
     except ModuleNotFoundError:
         print(
             "`grammar.py` not found. Either make one or set USE_GRAMMAR_MUTATIONS to False", file=sys.stderr
@@ -60,40 +59,9 @@ assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 fingerprint_t = tuple[frozenset[int], ...]
 
 
-def grammar_regenerate(b: bytes) -> bytes:
-    # Assumes that b matches the grammar_re.
-    # Returns a mutated b with a portion regenerated.
-    m: re.Match[bytes] | None = re.match(grammar_re, b)
-    assert m is not None
-    rule_name: str = random.choice(
-        [rule_name for rule_name, rule_match in m.groupdict().items() if rule_match is not None]
-    )
-    new_rule_match: bytes = generate_random_matching_input(grammar_dict[rule_name])
-    start, end = m.span(rule_name)
-    return m.string[:start] + new_rule_match + m.string[end:]
-
-
-def grammar_insert(b: bytes) -> bytes:
-    m: re.Match[bytes] | None = re.match(grammar_re, b)
-    assert m is not None
-    deserialized: dict[str, bytes | Any] = m.groupdict()
-    rule_name, new_rule_match = generate_grammar_insertion(deserialized)
-    deserialized[rule_name] = new_rule_match
-    return serialize(deserialized)
-
-
-def grammar_delete(b: bytes) -> bytes:
-    m: re.Match[bytes] | None = re.match(grammar_re, b)
-    assert m is not None
-    deserialized: dict[str, bytes | Any] = m.groupdict()
-    rule_name: str = random.choice(
-        [rule_name for rule_name, rule_match in m.groupdict().items() if rule_match is not None]
-    )
-    deserialized[rule_name] = None
-    return serialize(deserialized)
-
-
-def byte_change(b: bytes) -> bytes:
+def byte_replace(b: bytes) -> bytes:
+    if len(b) == 0:
+        raise ValueError("Mutation precondition didn't hold.")
     index: int = random.randint(0, len(b) - 1)
     return b[:index] + bytes([random.randint(0, 255)]) + b[index + 1 :]
 
@@ -104,28 +72,27 @@ def byte_insert(b: bytes) -> bytes:
 
 
 def byte_delete(b: bytes) -> bytes:
+    if len(b) <= 1:
+        raise ValueError("Mutation precondition didn't hold.")
     index: int = random.randint(0, len(b) - 1)
     return b[:index] + b[index + 1 :]
 
 
-def mutate(b: bytes) -> bytes:
-    mutators: list[Callable[[bytes], bytes]] = [byte_insert]
-    if len(b) > 0:
-        mutators.append(byte_change)
-    if len(b) > 1:
-        mutators.append(byte_delete)
-    if USE_GRAMMAR_MUTATIONS:
-        m = re.match(grammar_re, b)
-        if m is not None:
-            fields_filled, fields_avaliable = count_grammar(m.groupdict())
-            if fields_filled > 0:
-                mutators.append(grammar_regenerate)
-            if fields_filled > 1:
-                mutators.append(grammar_delete)
-            if fields_avaliable > 0:
-                mutators.append(grammar_insert)
+MUTATORS: list[Callable[[bytes], bytes]] = [byte_replace, byte_insert, byte_delete] + (
+    GRAMMAR_MUTATORS if USE_GRAMMAR_MUTATIONS else []
+)
 
-    return random.choice(mutators)(b)
+
+def mutate(b: bytes) -> bytes:
+    mutators: list[Callable[[bytes], bytes]] = MUTATORS.copy()
+    while len(mutators) != 0:
+        try:
+            mutator: Callable[[bytes], bytes] = random.choice(mutators)
+            return mutator(b)
+        except ValueError:
+            mutators.remove(mutator)
+    print("Input {b!r} cannot be mutated.", file=sys.stderr)
+    sys.exit(1)
 
 
 def parse_tracer_output(tracer_output: bytes) -> frozenset[int]:
