@@ -11,46 +11,44 @@ import numpy as np
 
 from diff_fuzz import trace_batch, fingerprint_t
 
-BENCHMARKING_DIR = PosixPath("benchmarking")
-RESULTS_DIR = PosixPath("results")
-REPORT_DIR = BENCHMARKING_DIR.joinpath("reports")
-ANALYSES_DIR = BENCHMARKING_DIR.joinpath("analyses")
+BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
+RESULTS_DIR: PosixPath = PosixPath("results")
+REPORTS_DIR: PosixPath = BENCHMARKING_DIR.joinpath("reports")
+ANALYSES_DIR: PosixPath = BENCHMARKING_DIR.joinpath("analyses")
 
 
-def retrieve_data(run_num: int) -> tuple[int, str, str]:
+def retrieve_data(run_num: int) -> tuple[str, str]:
     # Check directories
-    if not os.path.isdir(REPORT_DIR):
-        raise FileNotFoundError("Report directory doesn't exist!")
-    report_folder: PosixPath = REPORT_DIR.joinpath(str(run_num))
-    if not os.path.isdir(report_folder):
-        raise FileNotFoundError(f"Run #{run_num} doesn't have a report folder!")
+    report_dir: PosixPath = REPORTS_DIR.joinpath(str(run_num))
+    if not os.path.isdir(report_dir):
+        raise FileNotFoundError(f"Run {run_num} doesn't have a report folder!")
 
     # Retrieve name
-    name_file_path: PosixPath = report_folder.joinpath("name.txt")
+    name_file_path: PosixPath = report_dir.joinpath("name.txt")
     if not os.path.isfile(name_file_path):
         raise FileNotFoundError(f"Run #{run_num} doesn't have a name file!")
     with open(name_file_path, "r", encoding="utf-8") as name_file:
         run_name = name_file.read()
 
     # Retrieve UUID
-    report_file_path: PosixPath = report_folder.joinpath("report.json")
+    report_file_path: PosixPath = report_dir.joinpath("report.json")
     if not os.path.isfile(report_file_path):
         raise FileNotFoundError(f"{run_name} doesn't have a report file!")
-    with open(report_file_path, "r", encoding="utf-8") as report_file:
+    with open(report_file_path, "rb") as report_file:
         report = json.load(report_file)
-        run_uuid = report["uuid"]
+        run_uuid: str = report["uuid"]
 
     # Check for results folder
     if not os.path.isdir(RESULTS_DIR.joinpath(run_uuid)):
         raise FileNotFoundError(f"{run_name} doesn't have a differentials folder!")
 
-    return (run_num, run_name, run_uuid)
+    return (run_name, run_uuid)
 
 
 # Plot a run onto a given axis
 def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> None:
     # Load up all the differentials from the json
-    with open(report_file_path, "r", encoding="utf-8") as report_file:
+    with open(report_file_path, "rb") as report_file:
         report = json.load(report_file)
     differentials = report["differentials"]
     times: list[float] = []
@@ -71,6 +69,7 @@ def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> N
     axis[1].set_ylabel("Bugs")
 
 
+# ????
 def get_fingerprint_differentials(
     differentials_folder: PosixPath,
 ) -> dict[fingerprint_t, bytes]:
@@ -98,7 +97,6 @@ def get_fingerprint_differentials(
     return fingerprints_bytes
 
 
-# Given dictionaries of fingerprints in each run and the bytes those fingerprints correspond to
 def build_overlap_reports(
     runs_to_analyze: set[tuple[int, str, str]],
     summary_file_path: PosixPath,
@@ -148,7 +146,7 @@ def build_overlap_reports(
 
 
 def build_edge_graphs(
-    analysis_name: str, runs_to_analyze: list[tuple[int, str, str]], analysis_folder: PosixPath
+    analysis_name: str, runs_to_analyze: list[tuple[int, str, str]], analysis_dir: PosixPath
 ) -> None:
     print("Building Edge Graphs...")
     # Gather The Data
@@ -156,7 +154,7 @@ def build_edge_graphs(
 
     for i, (run_num, _, _) in enumerate(runs_to_analyze):
         report = json.loads(
-            open(REPORT_DIR.joinpath(str(run_num)).joinpath("report.json"), "r", encoding="utf-8").read()
+            open(REPORTS_DIR.joinpath(str(run_num)).joinpath("report.json"), "r", encoding="utf-8").read()
         )
         coverage = report["coverage"]
         for target_name in coverage.keys():
@@ -179,62 +177,63 @@ def build_edge_graphs(
             axis[0].plot(np.array(run[1]), np.array(run[0]), label=runs_to_analyze[i][0])
             axis[1].plot(np.array(run[2]), np.array(run[0]))
         figure.legend(loc="upper left")
-        plt.savefig(analysis_folder.joinpath(f"edges_{target_name}").with_suffix(".png"), format="png")
+        plt.savefig(analysis_dir.joinpath(f"edges_{target_name}").with_suffix(".png"), format="png")
         plt.close()
 
 
 def build_bug_graph(
-    analysis_name: str, runs_to_analyze: set[tuple[int, str, str]], analysis_folder: PosixPath
+    analysis_name: str, runs_to_analyze: set[tuple[int, str, str]], analysis_dir: PosixPath
 ) -> None:
     print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
     for run_num, run_name, _ in runs_to_analyze:
-        plot_bugs(run_name, REPORT_DIR.joinpath(str(run_num)).joinpath("report.json"), axis)
+        plot_bugs(run_name, REPORTS_DIR.joinpath(str(run_num)).joinpath("report.json"), axis)
 
     figure.legend(loc="upper left")
-    plt.savefig(analysis_folder.joinpath("bug_graph").with_suffix(".png"), format="png")
+    plt.savefig(analysis_dir.joinpath("bug_graph").with_suffix(".png"), format="png")
     plt.close()
 
 
 def main() -> None:
-    assert os.path.exists(RESULTS_DIR)
-    assert os.path.exists(ANALYSES_DIR)
-    assert os.path.exists(REPORT_DIR)
+    assert RESULTS_DIR.is_dir()
+    assert ANALYSES_DIR.is_dir()
+    assert REPORTS_DIR.is_dir()
 
-    # Retrieve Arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-n", type=str, default="Analysis", help="The Name of the Analysis to Create")
-    parser.add_argument("-b", help="Enable Creation of Bug Graph", action="store_true")
-    parser.add_argument("-v", help="Enable Creation of Overlap Reports", action="store_true")
-    parser.add_argument("-e", help="Enable Creation of Edge graphs", action="store_true")
-    args = parser.parse_args()
+    # Retrieve arguments
+    parser: argparse.ArgumentParser = argparse.ArgumentParser()
+    parser.add_argument("--name", type=str, required=True, help="The name of the analysis to create")
+    parser.add_argument("--bug-count", help="Enable creation of bug count plot", action="store_true")
+    parser.add_argument("--bug-overlap", help="Enable creation of bug overlap reports", action="store_true")
+    parser.add_argument("--edge-count", help="Enable creation of edge count plot", action="store_true")
+    args: argparse.Namespace = parser.parse_args()
 
     # ensure at least one option is enabled
-    assert any((args.b, args.v, args.e))
+    if not any((args.bug_count, args.edge_count, args.bug_overlap)):
+        raise ValueError("At least one of --bug-count, --bug-overlap, --edge-count must be passed.")
 
-    runs_to_analyze: set[tuple[int, str, str]] = set()
-    for report_folder in os.listdir(REPORT_DIR):
-        runs_to_analyze.add(retrieve_data(int(report_folder)))
+    runs_to_analyze: list[tuple[str, str]] = []
+    for report_dir in os.listdir(REPORTS_DIR):
+        runs_to_analyze.append(retrieve_data(int(report_dir)))
 
     analysis_uuid: str = str(uuid.uuid4())
-    analysis_folder: PosixPath = ANALYSES_DIR.joinpath(analysis_uuid)
-    os.mkdir(analysis_folder)
+    analysis_dir: PosixPath = ANALYSES_DIR.joinpath(analysis_uuid)
+    os.mkdir(analysis_dir)
 
-    if args.b:
-        build_bug_graph(args.n, runs_to_analyze, analysis_folder)
-    if args.e:
-        build_edge_graphs(args.n, list(runs_to_analyze), analysis_folder)
-    if args.v:
+    if args.bug_count:
+        build_bug_graph(args.n, runs_to_analyze, analysis_dir)
+    if args.edge_count:
+        build_edge_graphs(args.n, runs_to_analyze, analysis_dir)
+    if args.bug_overlap:
         build_overlap_reports(
             runs_to_analyze,
-            analysis_folder.joinpath("overlap_summary").with_suffix(".txt"),
-            analysis_folder.joinpath("overlap_machine").with_suffix(".csv"),
-            args.n,
+            analysis_dir.joinpath("overlap_summary").with_suffix(".txt"),
+            analysis_dir.joinpath("overlap_machine").with_suffix(".csv"),
+            args.name,
         )
 
-    print(f"Analysis Path: {analysis_folder}")
+    print(f"Analysis done! See {analysis_dir.resolve()} for results")
 
 
 if __name__ == "__main__":
