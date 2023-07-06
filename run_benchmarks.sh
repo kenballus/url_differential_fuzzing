@@ -33,22 +33,19 @@ main (){
         mkdir benchmarking/reports
         echo "Start of new benchmarking run." > benchmarking/records.txt
         echo "-----Running-----"
-        declare -a names_uuids=()
+        run_count=0
         while read line || [ -n "$line" ]
         do
             name=$(echo $line | cut -f 1 -d ,)
             commit=$(echo $line | cut -f 2 -d ,)
             timeout=$(echo $line | cut -f 3 -d ,)
             tcs=$(echo $line | cut -f 4 -d ,)
-            uuid=$(uuidgen)
             echo "-------------------------------------------------------------------" >> benchmarking/records.txt
             echo $name >> benchmarking/records.txt
             echo $commit >> benchmarking/records.txt
             echo $timeout >> benchmarking/records.txt
             echo $tcs >> benchmarking/records.txt
-            echo $uuid >> benchmarking/records.txt
             echo "-------------------------------------------------------------------" >> benchmarking/records.txt
-            names_uuids+=("${name}" ${uuid})
             echo "Running: ${name}"
             # Switch to correct commit
             git checkout $commit >> benchmarking/records.txt
@@ -61,7 +58,12 @@ main (){
                 echo "Copying ${tcs} into the config file.." >> benchmarking/records.txt
                 cp "benchmarking/bench_configs/${tcs}" config.py
             fi
-            timeout --foreground --signal=2 $timeout python diff_fuzz.py $uuid 1> benchmarking/reports/${uuid}_report.json 2>> benchmarking/records.txt
+            # Make a folder to output info to
+            mkdir benchmarking/reports/${run_count}
+            echo -n $name > benchmarking/reports/${run_count}/name.txt
+            timeout --foreground --signal=2 $timeout python diff_fuzz.py 1> benchmarking/reports/${run_count}/report.json 2>> benchmarking/records.txt
+
+            let 'run_count++'
         done
 
         # Go back to the original branch
@@ -72,7 +74,7 @@ main (){
 
         # Analysis
         echo "-----Analysis-----"
-        python analyze.py $@ "${names_uuids[@]}"
+        python analyze.py $@
 
         # Clean Up
         rm -rf benchmarking/reports
