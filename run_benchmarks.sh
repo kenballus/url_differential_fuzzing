@@ -3,17 +3,6 @@
 # Go to the correct folder
 cd $(dirname $0)
 
-# Arg1 = name of the run
-# Arg2 = timeout of the run
-do_run () {
-    # Go to main folder
-    cd ..
-    # Run
-    timeout --foreground --signal=2 $2 python diff_fuzz.py $1 1> benchmarking/reports/${1}_report.json 2>> benchmarking/records.txt
-    # Return
-    cd benchmarking
-}
-
 use_statement() {
     echo "Use: run_benchmarks.sh -n name_of_analysis [-b] [-e] [-v] < queue_file"
     echo "  -n name_of_analysis -> The Name to attribute to the resulting Analysis"
@@ -28,10 +17,10 @@ main (){
     if [ $(basename $0) = "untracked_run_benchmarks.sh" ]
     then
         rm -rf /tmp/diff_fuzz* # Just in case temp files were left from a previous run
-        rm -rf reports
+        rm -rf benchmarking/reports
 
         # Save Original Config
-        cp ../config.py original_config.py
+        cp config.py benchmarking/original_config.py
         if [ $? -ne 0 ]
         then
             echo "No original config! Try running make in the main directory."
@@ -41,8 +30,8 @@ main (){
         # Save original branch
         org_branch=$(git branch --show-current)
 
-        mkdir reports
-        echo "Start of new benchmarking run" > records.txt
+        mkdir benchmarking/reports
+        echo "Start of new benchmarking run." > benchmarking/records.txt
         echo "-----Running-----"
         declare -a names_uuids=()
         while read line || [ -n "$line" ]
@@ -52,43 +41,42 @@ main (){
             timeout=$(echo $line | cut -f 3 -d ,)
             tcs=$(echo $line | cut -f 4 -d ,)
             uuid=$(uuidgen)
-            echo "-------------------------------------------------------------------" >> records.txt
-            echo $name >> records.txt
-            echo $commit >> records.txt
-            echo $timeout >> records.txt
-            echo $tcs >> records.txt
-            echo $uuid >> records.txt
-            echo "-------------------------------------------------------------------" >> records.txt
+            echo "-------------------------------------------------------------------" >> benchmarking/records.txt
+            echo $name >> benchmarking/records.txt
+            echo $commit >> benchmarking/records.txt
+            echo $timeout >> benchmarking/records.txt
+            echo $tcs >> benchmarking/records.txt
+            echo $uuid >> benchmarking/records.txt
+            echo "-------------------------------------------------------------------" >> benchmarking/records.txt
             names_uuids+=("${name}" ${uuid})
             echo "Running: ${name}"
             # Switch to correct commit
-            git checkout $commit >> records.txt
+            git checkout $commit >> benchmarking/records.txt
             # Do the run
             if [ "$tcs" = "" ]
             then
-                echo "No config specified; copying original config into the config file.." >> records.txt
-                cp original_config.py ../config.py
-                do_run ${uuid} ${timeout}
+                echo "No config specified; copying original config into the config file.." >> benchmarking/records.txt
+                cp benchmarking/original_config.py config.py
             else
-                echo "Copying ${tcs} into the config file.." >> records.txt
-                cp "bench_configs/${tcs}" ../config.py
-                do_run ${uuid} ${timeout}
+                echo "Copying ${tcs} into the config file.." >> benchmarking/records.txt
+                cp "benchmarking/bench_configs/${tcs}" config.py
             fi
+            timeout --foreground --signal=2 $timeout python diff_fuzz.py $uuid 1> benchmarking/reports/${uuid}_report.json 2>> benchmarking/records.txt
         done
 
         # Go back to the original branch
         git switch $org_branch
 
         # Bring back orginal config
-        cp original_config.py ../config.py
+        cp benchmarking/original_config.py config.py
 
         # Analysis
         echo "-----Analysis-----"
         python analyze.py $@ "${names_uuids[@]}"
 
         # Clean Up
-        rm -rf reports
-        rm original_config.py
+        rm -rf benchmarking/reports
+        rm benchmarking/original_config.py
     else
         echo "Copying script into untracked version"
         cp run_benchmarks.sh untracked_run_benchmarks.sh
