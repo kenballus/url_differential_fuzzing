@@ -17,14 +17,34 @@ REPORT_DIR = BENCHMARKING_DIR.joinpath("reports")
 ANALYSES_DIR = BENCHMARKING_DIR.joinpath("analyses")
 
 
-# Check that necessary files exist for the given run
-def assert_data(run_uuid: str) -> None:
+def retrieve_data(run_num: int) -> tuple[int, str, str]:
+    # Check directories
     if not os.path.isdir(REPORT_DIR):
-        raise FileNotFoundError("Report Directory doesn't exist!")
-    if not os.path.isfile(REPORT_DIR.joinpath(f"{run_uuid}_report.json")):
-        raise FileNotFoundError(f"{run_uuid} doesn't have a report file!")
+        raise FileNotFoundError("Report directory doesn't exist!")
+    report_folder: PosixPath = REPORT_DIR.joinpath(str(run_num))
+    if not os.path.isdir(report_folder):
+        raise FileNotFoundError(f"Run #{run_num} doesn't have a report folder!")
+
+    # Retrieve name
+    name_file_path: PosixPath = report_folder.joinpath("name.txt")
+    if not os.path.isfile(name_file_path):
+        raise FileNotFoundError(f"Run #{run_num} doesn't have a name file!")
+    with open(name_file_path, "r", encoding="utf-8") as name_file:
+        run_name = name_file.read()
+
+    # Retrieve UUID
+    report_file_path: PosixPath = report_folder.joinpath("report.json")
+    if not os.path.isfile(report_file_path):
+        raise FileNotFoundError(f"{run_name} doesn't have a report file!")
+    with open(report_file_path, "r", encoding="utf-8") as report_file:
+        report = json.load(report_file)
+        run_uuid = report["uuid"]
+
+    # Check for results folder
     if not os.path.isdir(RESULTS_DIR.joinpath(run_uuid)):
-        raise FileNotFoundError(f"{run_uuid} doesn't have a differentials folder!")
+        raise FileNotFoundError(f"{run_name} doesn't have a differentials folder!")
+
+    return (run_num, run_name, run_uuid)
 
 
 # Plot a run onto a given axis
@@ -80,27 +100,27 @@ def get_fingerprint_differentials(
 
 # Given dictionaries of fingerprints in each run and the bytes those fingerprints correspond to
 def build_overlap_reports(
-    runs_to_analyze: set[tuple[str, str]],
+    runs_to_analyze: set[tuple[int, str, str]],
     summary_file_path: PosixPath,
     machine_file_path: PosixPath,
     analysis_name: str,
 ) -> None:
     print("Building Overlap Reports...")
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
-    for run_name, run_uuid in runs_to_analyze:
+    for _, run_name, run_uuid in runs_to_analyze:
         run_differentials[run_name] = get_fingerprint_differentials(RESULTS_DIR.joinpath(run_uuid))
     # Setup analysis file and machine file
     with open(summary_file_path, "wb") as analysis_file:
         analysis_file.write(f"Analysis: {analysis_name}\n".encode("utf-8"))
     with open(machine_file_path, "w", encoding="utf-8") as machine_file:
-        machine_file.write(f"{','.join(run_name for run_name, _ in runs_to_analyze)},count\n")
+        machine_file.write(f"{','.join(run_name for _, run_name, _ in runs_to_analyze)},count\n")
     # Get list of combos from big to small
     enables_list = list(itertools.product([True, False], repeat=len(runs_to_analyze)))
     enables_list.sort(key=sum, reverse=True)
     seen_fingerprints: set[fingerprint_t] = set()
     for enables in enables_list:
         # Create combo from enabled runs
-        combo = list(run for (run, _), enabled in zip(runs_to_analyze, enables) if enabled)
+        combo = list(run_name for (_, run_name, _), enabled in zip(runs_to_analyze, enables) if enabled)
         # Save combo name before editing combo
         combo_name: bytes = bytes(",".join(combo), "utf-8")
         # For each combo build list of common bugs
@@ -128,15 +148,15 @@ def build_overlap_reports(
 
 
 def build_edge_graphs(
-    analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_folder: PosixPath
+    analysis_name: str, runs_to_analyze: list[tuple[int, str, str]], analysis_folder: PosixPath
 ) -> None:
     print("Building Edge Graphs...")
     # Gather The Data
     edge_data: dict[str, tuple[tuple[list[int], list[float], list[int]], ...]] = {}
 
-    for i, (_, run_uuid) in enumerate(runs_to_analyze):
+    for i, (run_num, _, _) in enumerate(runs_to_analyze):
         report = json.loads(
-            open(REPORT_DIR.joinpath(f"{run_uuid}_report.json"), "r", encoding="utf-8").read()
+            open(REPORT_DIR.joinpath(str(run_num)).joinpath("report.json"), "r", encoding="utf-8").read()
         )
         coverage = report["coverage"]
         for target_name in coverage.keys():
@@ -164,15 +184,14 @@ def build_edge_graphs(
 
 
 def build_bug_graph(
-    analysis_name: str, runs_to_analyze: set[tuple[str, str]], analysis_folder: PosixPath
+    analysis_name: str, runs_to_analyze: set[tuple[int, str, str]], analysis_folder: PosixPath
 ) -> None:
     print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
-    for run_name, run_uuid in runs_to_analyze:
-        assert_data(run_uuid)
-        plot_bugs(run_name, REPORT_DIR.joinpath(f"{run_uuid}_report.json"), axis)
+    for run_num, run_name, _ in runs_to_analyze:
+        plot_bugs(run_name, REPORT_DIR.joinpath(str(run_num)).joinpath("report.json"), axis)
 
     figure.legend(loc="upper left")
     plt.savefig(analysis_folder.joinpath("bug_graph").with_suffix(".png"), format="png")
@@ -190,18 +209,14 @@ def main() -> None:
     parser.add_argument("-b", help="Enable Creation of Bug Graph", action="store_true")
     parser.add_argument("-v", help="Enable Creation of Overlap Reports", action="store_true")
     parser.add_argument("-e", help="Enable Creation of Edge graphs", action="store_true")
-    args, inputs = parser.parse_known_args()
+    args = parser.parse_args()
 
     # ensure at least one option is enabled
     assert any((args.b, args.v, args.e))
 
-    # Check that args are correct
-    assert len(inputs) > 3
-    assert len(inputs) % 2 == 0
-
-    runs_to_analyze: set[tuple[str, str]] = set(
-        (inputs[i], inputs[i + 1]) for i in range(len(inputs)) if i % 2 == 0
-    )
+    runs_to_analyze: set[tuple[int, str, str]] = set()
+    for report_folder in os.listdir(REPORT_DIR):
+        runs_to_analyze.add(retrieve_data(int(report_folder)))
 
     analysis_uuid: str = str(uuid.uuid4())
     analysis_folder: PosixPath = ANALYSES_DIR.joinpath(analysis_uuid)

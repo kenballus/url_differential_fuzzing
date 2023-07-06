@@ -481,6 +481,8 @@ if __name__ == "__main__":
             )
     print("{")
 
+    print(f'"uuid":"{_run_id}",')
+
     print('"coverage":\n    {')
     for _i, _tc in enumerate(TARGET_CONFIGS):
         if _i != 0:
