@@ -479,33 +479,24 @@ if __name__ == "__main__":
                 f"Differential: {str(_final_differential)[2:-1]:20} Path: {str(_result_file_path)}",
                 file=sys.stderr,
             )
-    print("{")
 
-    print(f'"uuid":"{_run_id}",')
-
-    print('"coverage":\n    {')
-    for _i, _tc in enumerate(TARGET_CONFIGS):
-        if _i != 0:
-            print(",")
-        print(f'        "{_tc.name}":\n            [')
-        print(
-            ",\n".join(
-                f'                {{"edges":"{_edges}","time":"{_time}","generation":"{_generation}"}}'
-                for (_edges, _time, _generation) in _coverage_info[_i]
-            ),
-            end="",
-        )
-        print("\n            ]", end="")
-    print("\n    },")
-
-    print('"differentials":\n    [')
-    print(
-        ",\n".join(
-            f'        {{"differential":"{str(base64.b64encode(_differential), "ascii")}", "path":"{_run_results_dir.joinpath(str(hash(_differential)))}", "time":"{_time}", "generation":"{_generation}"}}'
-            for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
-        )
-    )
-    print("    ]")
-    print("}")
+    _coverage_output: dict = {
+        _tc.name: [
+            {"edges": _edges, "time": _time, "generation": _generation}
+            for (_edges, _time, _generation) in _coverage_info[_i]
+        ]
+        for _i, _tc in enumerate(TARGET_CONFIGS)
+    }
+    _differentials_output: list[dict] = [
+        {
+            "differential": str(base64.b64encode(_differential), "ascii"),
+            "path": str(_run_results_dir.joinpath(str(hash(_differential))).resolve()),
+            "time": _time,
+            "generation": _generation,
+        }
+        for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
+    ]
+    _output: dict = {"uuid": _run_id, "coverage": _coverage_output, "differentials": _differentials_output}
+    print(json.dumps(_output, indent=4))
 
     shutil.rmtree(_work_dir)
