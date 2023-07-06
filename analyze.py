@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import shutil
 import itertools
@@ -16,6 +15,7 @@ BENCHMARKING_DIR = PosixPath("benchmarking")
 RESULTS_DIR = PosixPath("results")
 REPORT_DIR = BENCHMARKING_DIR.joinpath("reports")
 ANALYSES_DIR = BENCHMARKING_DIR.joinpath("analyses")
+
 
 # Check that necessary files exist for the given run
 def assert_data(run_uuid: str) -> None:
@@ -127,7 +127,9 @@ def build_overlap_reports(
             comparison_file.write(b"***\n")
 
 
-def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_folder: PosixPath) -> None:
+def build_edge_graphs(
+    analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_folder: PosixPath
+) -> None:
     print("Building Edge Graphs...")
     # Gather The Data
     edge_data: dict[str, tuple[tuple[list[int], list[float], list[int]], ...]] = {}
@@ -161,7 +163,9 @@ def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]]
         plt.close()
 
 
-def build_bug_graph(analysis_name: str, runs_to_analyze: set[tuple[str, str]], analysis_folder: PosixPath) -> None:
+def build_bug_graph(
+    analysis_name: str, runs_to_analyze: set[tuple[str, str]], analysis_folder: PosixPath
+) -> None:
     print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
