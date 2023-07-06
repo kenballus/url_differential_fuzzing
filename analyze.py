@@ -10,32 +10,25 @@ from pathlib import PosixPath
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 
-RESULTS_DIR = "../results"
-REPORT_DIR = "reports"
-ANALYSES_DIR = "analyses"
+from diff_fuzz import trace_batch, fingerprint_t
 
-working_dir: str = os.path.dirname(__file__)
-parent_dir: str = os.path.dirname(working_dir)
-sys.path.append(parent_dir)
-
-os.chdir(parent_dir)
-from diff_fuzz import trace_batch, fingerprint_t  # type: ignore
-
-os.chdir(working_dir)
-
+BENCHMARKING_DIR = PosixPath("benchmarking")
+RESULTS_DIR = PosixPath("results")
+REPORT_DIR = BENCHMARKING_DIR.joinpath("reports")
+ANALYSES_DIR = BENCHMARKING_DIR.joinpath("analyses")
 
 # Check that necessary files exist for the given run
-def assert_data(run_uuid: str):
-    if not os.path.isdir(PosixPath(REPORT_DIR)):
+def assert_data(run_uuid: str) -> None:
+    if not os.path.isdir(REPORT_DIR):
         raise FileNotFoundError("Report Directory doesn't exist!")
-    if not os.path.isfile(PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json")):
+    if not os.path.isfile(REPORT_DIR.joinpath(f"{run_uuid}_report.json")):
         raise FileNotFoundError(f"{run_uuid} doesn't have a report file!")
-    if not os.path.isdir(PosixPath(RESULTS_DIR).joinpath(run_uuid)):
+    if not os.path.isdir(RESULTS_DIR.joinpath(run_uuid)):
         raise FileNotFoundError(f"{run_uuid} doesn't have a differentials folder!")
 
 
 # Plot a run onto a given axis
-def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray):
+def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> None:
     # Load up all the differentials from the json
     with open(report_file_path, "r", encoding="utf-8") as report_file:
         report = json.load(report_file)
@@ -75,9 +68,7 @@ def get_fingerprint_differentials(
     if os.path.exists(run_dir):
         shutil.rmtree(run_dir)
     os.mkdir(run_dir)
-    os.chdir(parent_dir)
     fingerprints: list[fingerprint_t] = trace_batch(run_dir, byte_differentials)
-    os.chdir(working_dir)
     shutil.rmtree(run_dir)
 
     # Record
@@ -93,11 +84,11 @@ def build_overlap_reports(
     summary_file_path: PosixPath,
     machine_file_path: PosixPath,
     analysis_name: str,
-):
+) -> None:
     print("Building Overlap Reports...")
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
     for run_name, run_uuid in runs_to_analyze:
-        run_differentials[run_name] = get_fingerprint_differentials(PosixPath(RESULTS_DIR).joinpath(run_uuid))
+        run_differentials[run_name] = get_fingerprint_differentials(RESULTS_DIR.joinpath(run_uuid))
     # Setup analysis file and machine file
     with open(summary_file_path, "wb") as analysis_file:
         analysis_file.write(f"Analysis: {analysis_name}\n".encode("utf-8"))
@@ -136,14 +127,14 @@ def build_overlap_reports(
             comparison_file.write(b"***\n")
 
 
-def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_folder: PosixPath):
+def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_folder: PosixPath) -> None:
     print("Building Edge Graphs...")
     # Gather The Data
     edge_data: dict[str, tuple[tuple[list[int], list[float], list[int]], ...]] = {}
 
     for i, (_, run_uuid) in enumerate(runs_to_analyze):
         report = json.loads(
-            open(PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json"), "r", encoding="utf-8").read()
+            open(REPORT_DIR.joinpath(f"{run_uuid}_report.json"), "r", encoding="utf-8").read()
         )
         coverage = report["coverage"]
         for target_name in coverage.keys():
@@ -170,21 +161,21 @@ def build_edge_graphs(analysis_name: str, runs_to_analyze: list[tuple[str, str]]
         plt.close()
 
 
-def build_bug_graph(analysis_name: str, runs_to_analyze: set[tuple[str, str]], analysis_folder: PosixPath):
+def build_bug_graph(analysis_name: str, runs_to_analyze: set[tuple[str, str]], analysis_folder: PosixPath) -> None:
     print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
     for run_name, run_uuid in runs_to_analyze:
         assert_data(run_uuid)
-        plot_bugs(run_name, PosixPath(REPORT_DIR).joinpath(f"{run_uuid}_report.json"), axis)
+        plot_bugs(run_name, REPORT_DIR.joinpath(f"{run_uuid}_report.json"), axis)
 
     figure.legend(loc="upper left")
     plt.savefig(analysis_folder.joinpath("bug_graph").with_suffix(".png"), format="png")
     plt.close()
 
 
-def main():
+def main() -> None:
     assert os.path.exists(RESULTS_DIR)
     assert os.path.exists(ANALYSES_DIR)
     assert os.path.exists(REPORT_DIR)
@@ -209,7 +200,7 @@ def main():
     )
 
     analysis_uuid: str = str(uuid.uuid4())
-    analysis_folder: PosixPath = PosixPath(ANALYSES_DIR).joinpath(analysis_uuid)
+    analysis_folder: PosixPath = ANALYSES_DIR.joinpath(analysis_uuid)
     os.mkdir(analysis_folder)
 
     if args.b:
