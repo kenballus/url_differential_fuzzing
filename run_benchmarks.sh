@@ -18,6 +18,7 @@ main (){
     then
         rm -rf /tmp/diff_fuzz* # Just in case temp files were left from a previous run
         rm -rf benchmarking/reports
+        rm -f benchmarking/uuidlist.txt
 
         # Save Original Config
         cp config.py benchmarking/original_config.py
@@ -30,10 +31,8 @@ main (){
         # Save original branch
         org_branch=$(git branch --show-current)
 
-        mkdir benchmarking/reports
         echo "Start of new benchmarking run." > benchmarking/records.txt
         echo "-----Running-----"
-        run_count=0
         while read line || [ -n "$line" ]
         do
             name=$(echo $line | cut -f 1 -d ,)
@@ -58,12 +57,7 @@ main (){
                 echo "Copying ${tcs} into the config file.." >> benchmarking/records.txt
                 cp "benchmarking/bench_configs/${tcs}" config.py
             fi
-            # Make a folder to output info to
-            mkdir benchmarking/reports/${run_count}
-            echo -n $name > benchmarking/reports/${run_count}/name.txt
-            timeout --foreground --signal=2 $timeout python diff_fuzz.py 1> benchmarking/reports/${run_count}/report.json 2>> benchmarking/records.txt
-
-            let 'run_count++'
+            timeout --foreground --signal=2 $timeout python diff_fuzz.py 1>> benchmarking/uuidlist.txt 2>> benchmarking/records.txt
         done
 
         # Go back to the original branch
@@ -77,7 +71,7 @@ main (){
         python analyze.py $@
 
         # Clean Up
-        rm -rf benchmarking/reports
+        rm -rf benchmarking/uuidlist.txt
         rm benchmarking/original_config.py
     else
         echo "Copying script into untracked version"
