@@ -28,6 +28,52 @@ def assert_data(run_name: str, run_uuid: str) -> None:
         raise FileNotFoundError(f"{run_name} doesn't have a differentials folder!")
 
 
+@dataclass
+class edge_datapoint:
+    edge_count: int
+    time: float
+    generation: int
+
+
+@dataclass
+class bug_datapoint:
+    bug_count: int
+    time: float
+    generation: int
+
+
+def parse_reports(
+    runs_to_analyze: list[tuple[str, str]]
+) -> tuple[dict[str, list[bug_datapoint]], dict[str, tuple[list[edge_datapoint], ...]]]:
+    bug_data: dict[str, list[bug_datapoint]] = {}
+    edge_data: dict[str, tuple[list[edge_datapoint], ...]] = {}
+    for i, (_, run_uuid) in enumerate(runs_to_analyze):
+        with open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "rb") as report_file:
+            report_json: dict = json.load(report_file)
+        # Parse the JSON for bug data
+        differentials_json: list[dict] = report_json["differentials"]
+        differentials: list[bug_datapoint] = []
+        running_count: int = 0
+        for differential_json in differentials_json:
+            running_count += 1
+            differentials.append(
+                bug_datapoint(running_count, differential_json["time"], differential_json["generation"])
+            )
+        bug_data[run_uuid] = differentials
+        # Parse the JSON for edge data
+        coverage_json: dict[str, list[dict]] = report_json["coverage"]
+        for target_name in coverage_json.keys():
+            if target_name not in edge_data:
+                edge_data[target_name] = tuple([] for _ in runs_to_analyze)
+            for data_point_json in coverage_json[target_name]:
+                edge_data[target_name][i].append(
+                    edge_datapoint(
+                        data_point_json["edges"], data_point_json["time"], data_point_json["generation"]
+                    )
+                )
+    return bug_data, edge_data
+
+
 # ????
 def get_fingerprint_differentials(
     differentials_folder: PosixPath,
@@ -104,33 +150,13 @@ def build_overlap_reports(
             comparison_file.write(b"***\n")
 
 
-@dataclass
-class edge_datapoint:
-    edge_count: int
-    time: float
-    generation: int
-
-
 def build_edge_graphs(
-    analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_dir: PosixPath
+    analysis_name: str,
+    runs_to_analyze: list[tuple[str, str]],
+    analysis_dir: PosixPath,
+    edge_data: dict[str, tuple[list[edge_datapoint], ...]],
 ) -> None:
     print("Building Edge Graphs...")
-    # Parse The JSON
-    edge_data: dict[str, tuple[list[edge_datapoint], ...]] = {}
-
-    for i, (_, run_uuid) in enumerate(runs_to_analyze):
-        with open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "rb") as report_file:
-            report_json: dict = json.load(report_file)
-        coverage_json: dict[str, list[dict]] = report_json["coverage"]
-        for target_name in coverage_json.keys():
-            if target_name not in edge_data:
-                edge_data[target_name] = tuple([] for _ in runs_to_analyze)
-            for data_point_json in coverage_json[target_name]:
-                edge_data[target_name][i].append(
-                    edge_datapoint(
-                        data_point_json["edges"], data_point_json["time"], data_point_json["generation"]
-                    )
-                )
 
     # Build The Graphs
     for target_name, runs in edge_data.items():
@@ -154,26 +180,8 @@ def build_edge_graphs(
         plt.close()
 
 
-@dataclass
-class bug_datapoint:
-    bug_count: int
-    time: float
-    generation: int
-
-
 # Plot a run onto a given axis
-def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> None:
-    # Load up all the differentials from the json
-    with open(report_file_path, "rb") as report_file:
-        report: dict = json.load(report_file)
-    differentials_json: list[dict] = report["differentials"]
-    differentials: list[bug_datapoint] = []
-    running_count: int = 0
-    for differential_json in differentials_json:
-        running_count += 1
-        differentials.append(
-            bug_datapoint(running_count, differential_json["time"], differential_json["generation"])
-        )
+def plot_bugs(run_name: str, differentials: list[bug_datapoint], axis: np.ndarray) -> None:
     # Plot Things
     axis[0].plot(
         np.array([differential.time for differential in differentials]),
@@ -191,14 +199,17 @@ def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> N
 
 
 def build_bug_graph(
-    analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_dir: PosixPath
+    analysis_name: str,
+    runs_to_analyze: list[tuple[str, str]],
+    analysis_dir: PosixPath,
+    bug_data: dict[str, list[bug_datapoint]],
 ) -> None:
     print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
     for run_name, run_uuid in runs_to_analyze:
-        plot_bugs(run_name, REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), axis)
+        plot_bugs(run_name, bug_data[run_uuid], axis)
 
     figure.legend(loc="upper left")
     plt.savefig(analysis_dir.joinpath("bug_graph").with_suffix(".png"), format="png")
@@ -232,14 +243,16 @@ def main() -> None:
     for run_name, run_uuid in runs_to_analyze:
         assert_data(run_name, run_uuid)
 
+    bug_data, edge_data = parse_reports(runs_to_analyze)
+
     analysis_uuid: str = str(uuid.uuid4())
     analysis_dir: PosixPath = ANALYSES_DIR.joinpath(analysis_uuid)
     os.mkdir(analysis_dir)
 
     if args.bug_count:
-        build_bug_graph(args.name, runs_to_analyze, analysis_dir)
+        build_bug_graph(args.name, runs_to_analyze, analysis_dir, bug_data)
     if args.edge_count:
-        build_edge_graphs(args.name, runs_to_analyze, analysis_dir)
+        build_edge_graphs(args.name, runs_to_analyze, analysis_dir, edge_data)
     if args.bug_overlap:
         build_overlap_reports(
             runs_to_analyze,
