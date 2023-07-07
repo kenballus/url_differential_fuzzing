@@ -4,6 +4,7 @@ import shutil
 import itertools
 import uuid
 import argparse
+import subprocess
 from pathlib import PosixPath
 from dataclasses import dataclass
 
@@ -16,6 +17,9 @@ BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
 RESULTS_DIR: PosixPath = PosixPath("results")
 REPORTS_DIR: PosixPath = PosixPath("reports")
 ANALYSES_DIR: PosixPath = BENCHMARKING_DIR.joinpath("analyses")
+
+CONFIG_FILE_PATH: PosixPath = PosixPath("config.py")
+CONFIG_COPY_PATH: PosixPath = BENCHMARKING_DIR.joinpath("config_copy.py")
 
 
 def assert_data(run_name: str, run_uuid: str) -> None:
@@ -235,6 +239,12 @@ def build_bug_graph(
     plt.savefig(analysis_dir.joinpath("bug_graph").with_suffix(".png"), format="png")
     plt.close()
 
+@dataclass
+class QueuedRun:
+    name: str
+    commit: str
+    timeout: int
+    config: str | None
 
 def main() -> None:
     assert RESULTS_DIR.is_dir()
@@ -243,7 +253,8 @@ def main() -> None:
 
     # Retrieve arguments
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
-    parser.add_argument("--name", type=str, required=True, help="The name of the analysis to create")
+    parser.add_argument("queue_file_path", help="The path to the queue file to take runs from for the analysis")
+    parser.add_argument("--name", help="TODO: Remove", required=True)
     parser.add_argument("--bug-count", help="Enable creation of bug count plot", action="store_true")
     parser.add_argument("--bug-overlap", help="Enable creation of bug overlap reports", action="store_true")
     parser.add_argument("--edge-count", help="Enable creation of edge count plot", action="store_true")
@@ -252,6 +263,40 @@ def main() -> None:
     # ensure at least one option is enabled
     if not any((args.bug_count, args.edge_count, args.bug_overlap)):
         raise ValueError("At least one of --bug-count, --bug-overlap, --edge-count must be passed.")
+
+    # Check that queue file exists
+    queue_file_path = PosixPath(args.queue_file_path)
+    assert os.path.isfile(queue_file_path)
+
+    # Copy the config
+    assert os.path.isfile(CONFIG_FILE_PATH)
+    shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
+
+    # Save original branch
+    original_branch: bytes = subprocess.run(["git","branch","--show-current"], capture_output=True, check=True).stdout.strip()
+
+    queued_runs: list[QueuedRun] = []
+    # Read queue file
+    with open(queue_file_path, "r") as queue_file:
+        for line in queue_file.readlines():
+            split_line: list[str] = line.strip().split(",")
+            if len(split_line) < 3:
+                raise ValueError(f"Queue line {line.strip()} has too few arguments.")
+            if len(split_line) > 4:
+                raise ValueError(f"Queue line {line.strip()} has too many arguments.")
+            try:
+                timeout: int = int(split_line[2])
+            except ValueError as e:
+                raise ValueError(f"Timeout {split_line[2]} must be an integer") from e
+            queued_runs.append(QueuedRun(split_line[0], split_line[1], timeout, split_line[3] if len(split_line) == 4 else None))
+
+    for queued_run in queued_runs:
+        subprocess.run(["git","checkout",queued_run.commit], capture_output=True, check=True)
+
+    # Cleanup
+    os.remove(CONFIG_COPY_PATH)
+
+    return
 
     # Running of tests should be done in python
     # Should return uuids, these are temp
