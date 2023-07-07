@@ -321,6 +321,7 @@ def main() -> None:
                             "timeout",
                             "--foreground",
                             "--signal=2",
+                            "--preserve-status",
                             str(queued_run.timeout),
                             "python",
                             "diff_fuzz.py",
