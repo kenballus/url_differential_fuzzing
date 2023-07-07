@@ -5,6 +5,7 @@ import itertools
 import uuid
 import argparse
 from pathlib import PosixPath
+from dataclasses import dataclass
 
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
@@ -103,25 +104,33 @@ def build_overlap_reports(
             comparison_file.write(b"***\n")
 
 
+@dataclass
+class edge_datapoint:
+    edge_count: int
+    time: float
+    generation: int
+
+
 def build_edge_graphs(
     analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_dir: PosixPath
 ) -> None:
     print("Building Edge Graphs...")
-    # Gather The Data
-    edge_data: dict[str, tuple[tuple[list[int], list[float], list[int]], ...]] = {}
+    # Parse The JSON
+    edge_data: dict[str, tuple[list[edge_datapoint], ...]] = {}
 
     for i, (_, run_uuid) in enumerate(runs_to_analyze):
-        report = json.loads(
-            open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "r", encoding="utf-8").read()
-        )
-        coverage = report["coverage"]
-        for target_name in coverage.keys():
+        with open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "rb") as report_file:
+            report_json: dict = json.load(report_file)
+        coverage_json: dict[str, list[dict]] = report_json["coverage"]
+        for target_name in coverage_json.keys():
             if target_name not in edge_data:
-                edge_data[target_name] = tuple(([], [], []) for _ in runs_to_analyze)
-            for data_point in coverage[target_name]:
-                edge_data[target_name][i][0].append(int(data_point["edges"]))
-                edge_data[target_name][i][1].append(float(data_point["time"]))
-                edge_data[target_name][i][2].append(int(data_point["generation"]))
+                edge_data[target_name] = tuple([] for _ in runs_to_analyze)
+            for data_point_json in coverage_json[target_name]:
+                edge_data[target_name][i].append(
+                    edge_datapoint(
+                        data_point_json["edges"], data_point_json["time"], data_point_json["generation"]
+                    )
+                )
 
     # Build The Graphs
     for target_name, runs in edge_data.items():
@@ -132,33 +141,51 @@ def build_edge_graphs(
         axis[1].set_xlabel("Generations")
         axis[1].set_ylabel("Edges")
         for i, run in enumerate(runs):
-            axis[0].plot(np.array(run[1]), np.array(run[0]), label=runs_to_analyze[i][0])
-            axis[1].plot(np.array(run[2]), np.array(run[0]))
+            axis[0].plot(
+                np.array([point.time for point in run]),
+                np.array([point.edge_count for point in run]),
+                label=runs_to_analyze[i][0],
+            )
+            axis[1].plot(
+                np.array([point.generation for point in run]), np.array([point.edge_count for point in run])
+            )
         figure.legend(loc="upper left")
         plt.savefig(analysis_dir.joinpath(f"edges_{target_name}").with_suffix(".png"), format="png")
         plt.close()
+
+
+@dataclass
+class bug_datapoint:
+    bug_count: int
+    time: float
+    generation: int
 
 
 # Plot a run onto a given axis
 def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> None:
     # Load up all the differentials from the json
     with open(report_file_path, "rb") as report_file:
-        report = json.load(report_file)
-    differentials = report["differentials"]
-    times: list[float] = []
-    generations: list[int] = []
-    count: list[int] = []
+        report: dict = json.load(report_file)
+    differentials_json: list[dict] = report["differentials"]
+    differentials: list[bug_datapoint] = []
     running_count: int = 0
-    for differential in differentials:
+    for differential_json in differentials_json:
         running_count += 1
-        generations.append(int(differential["generation"]))
-        count.append(running_count)
-        times.append(float(differential["time"]))
+        differentials.append(
+            bug_datapoint(running_count, differential_json["time"], differential_json["generation"])
+        )
     # Plot Things
-    axis[0].plot(np.array(times), np.array(count), label=run_name)
+    axis[0].plot(
+        np.array([differential.time for differential in differentials]),
+        np.array([differential.bug_count for differential in differentials]),
+        label=run_name,
+    )
     axis[0].set_xlabel("Time (s)")
     axis[0].set_ylabel("Bugs")
-    axis[1].plot(np.array(generations), np.array(count))
+    axis[1].plot(
+        np.array([differential.generation for differential in differentials]),
+        np.array([differential.bug_count for differential in differentials]),
+    )
     axis[1].set_xlabel("Generations")
     axis[1].set_ylabel("Bugs")
 
