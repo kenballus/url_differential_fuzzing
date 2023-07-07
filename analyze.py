@@ -240,12 +240,14 @@ def build_bug_graph(
     plt.savefig(analysis_dir.joinpath("bug_graph").with_suffix(".png"), format="png")
     plt.close()
 
+
 @dataclass
 class QueuedRun:
     name: str
     commit: str
     timeout: int
     config: str | None
+
 
 def main() -> None:
     assert RESULTS_DIR.is_dir()
@@ -255,7 +257,9 @@ def main() -> None:
 
     # Retrieve arguments
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
-    parser.add_argument("queue_file_path", help="The path to the queue file to take runs from for the analysis")
+    parser.add_argument(
+        "queue_file_path", help="The path to the queue file to take runs from for the analysis"
+    )
     parser.add_argument("--name", help="TODO: Remove", required=True)
     parser.add_argument("--bug-count", help="Enable creation of bug count plot", action="store_true")
     parser.add_argument("--bug-overlap", help="Enable creation of bug overlap reports", action="store_true")
@@ -275,11 +279,13 @@ def main() -> None:
     shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
 
     # Save original branch
-    original_branch: bytes = subprocess.run(["git","branch","--show-current"], capture_output=True, check=True).stdout.strip()
+    original_branch: bytes = subprocess.run(
+        ["git", "branch", "--show-current"], capture_output=True, check=True
+    ).stdout.strip()
 
     queued_runs: list[QueuedRun] = []
     # Read queue file and check validity
-    with open(queue_file_path, "r") as queue_file:
+    with open(queue_file_path, "r", encoding="ascii") as queue_file:
         for line in queue_file.readlines():
             split_line: list[str] = line.strip().split(",")
             if len(split_line) < 3:
@@ -297,19 +303,38 @@ def main() -> None:
                 raise ValueError(f"Timeout {split_line[2]} must be an integer") from e
             queued_runs.append(QueuedRun(split_line[0], split_line[1], timeout, config))
 
-    runs_to_analyze: list[tuple[str,str]] = []
+    runs_to_analyze: list[tuple[str, str]] = []
 
     # Execute queued runs
     for queued_run in queued_runs:
-        subprocess.run(["git","checkout",queued_run.commit], check=True)
+        subprocess.run(["git", "checkout", queued_run.commit], check=True)
         if queued_run.config is None:
             shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
         else:
             shutil.copyfile(CONFIGS_DIR.joinpath(queued_run.config), CONFIG_FILE_PATH)
-        runs_to_analyze.append(queued_run.name, str(subprocess.run(["timeout", "--foreground", "--signal=2" , str(queued_run.timeout), "python", "diff_fuzz.py"], capture_output=True, check=True).stdout, encoding='ascii').strip())
+        runs_to_analyze.append(
+            (
+                queued_run.name,
+                str(
+                    subprocess.run(
+                        [
+                            "timeout",
+                            "--foreground",
+                            "--signal=2",
+                            str(queued_run.timeout),
+                            "python",
+                            "diff_fuzz.py",
+                        ],
+                        capture_output=True,
+                        check=True,
+                    ).stdout,
+                    encoding="ascii",
+                ).strip(),
+            )
+        )
 
     # Cleanup
-    subprocess.run(["git","switch",original_branch], capture_output=True, check=True)
+    subprocess.run(["git", "switch", original_branch], capture_output=True, check=True)
     shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
     os.remove(CONFIG_COPY_PATH)
 
@@ -320,7 +345,7 @@ def main() -> None:
 
     # Running of tests should be done in python
     # Should return uuids, these are temp
-    runs_to_analyze: list[tuple[str, str]] = [
+    const_runs: list[tuple[str, str]] = [
         ("Name1", "5c483e92-0a72-422e-8afd-55bb8796bccc"),
         ("Name2", "9b2760f8-e0dc-4a97-98a5-aa123f0dbc07"),
         ("Name3", "3be9388c-7829-4737-a6fe-be1b997670f7"),
