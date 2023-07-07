@@ -13,60 +13,18 @@ from diff_fuzz import trace_batch, fingerprint_t
 
 BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
 RESULTS_DIR: PosixPath = PosixPath("results")
-REPORTS_DIR: PosixPath = BENCHMARKING_DIR.joinpath("reports")
+REPORTS_DIR: PosixPath = PosixPath("reports")
 ANALYSES_DIR: PosixPath = BENCHMARKING_DIR.joinpath("analyses")
 
 
-def retrieve_data(run_num: int) -> tuple[str, str]:
+def assert_data(run_name: str, run_uuid: str) -> None:
     # Check directories
-    report_dir: PosixPath = REPORTS_DIR.joinpath(str(run_num))
-    if not os.path.isdir(report_dir):
-        raise FileNotFoundError(f"Run {run_num} doesn't have a report folder!")
-
-    # Retrieve name
-    name_file_path: PosixPath = report_dir.joinpath("name.txt")
-    if not os.path.isfile(name_file_path):
-        raise FileNotFoundError(f"Run #{run_num} doesn't have a name file!")
-    with open(name_file_path, "r", encoding="utf-8") as name_file:
-        run_name = name_file.read()
-
-    # Retrieve UUID
-    report_file_path: PosixPath = report_dir.joinpath("report.json")
-    if not os.path.isfile(report_file_path):
+    if not os.path.isfile(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json")):
         raise FileNotFoundError(f"{run_name} doesn't have a report file!")
-    with open(report_file_path, "rb") as report_file:
-        report = json.load(report_file)
-        run_uuid: str = report["uuid"]
 
     # Check for results folder
     if not os.path.isdir(RESULTS_DIR.joinpath(run_uuid)):
         raise FileNotFoundError(f"{run_name} doesn't have a differentials folder!")
-
-    return (run_name, run_uuid)
-
-
-# Plot a run onto a given axis
-def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> None:
-    # Load up all the differentials from the json
-    with open(report_file_path, "rb") as report_file:
-        report = json.load(report_file)
-    differentials = report["differentials"]
-    times: list[float] = []
-    generations: list[int] = []
-    count: list[int] = []
-    running_count: int = 0
-    for differential in differentials:
-        running_count += 1
-        generations.append(int(differential["generation"]))
-        count.append(running_count)
-        times.append(float(differential["time"]))
-    # Plot Things
-    axis[0].plot(np.array(times), np.array(count), label=run_name)
-    axis[0].set_xlabel("Time (s)")
-    axis[0].set_ylabel("Bugs")
-    axis[1].plot(np.array(generations), np.array(count))
-    axis[1].set_xlabel("Generations")
-    axis[1].set_ylabel("Bugs")
 
 
 # ????
@@ -98,27 +56,27 @@ def get_fingerprint_differentials(
 
 
 def build_overlap_reports(
-    runs_to_analyze: set[tuple[int, str, str]],
+    runs_to_analyze: list[tuple[str, str]],
     summary_file_path: PosixPath,
     machine_file_path: PosixPath,
     analysis_name: str,
 ) -> None:
     print("Building Overlap Reports...")
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
-    for _, run_name, run_uuid in runs_to_analyze:
+    for run_name, run_uuid in runs_to_analyze:
         run_differentials[run_name] = get_fingerprint_differentials(RESULTS_DIR.joinpath(run_uuid))
     # Setup analysis file and machine file
     with open(summary_file_path, "wb") as analysis_file:
         analysis_file.write(f"Analysis: {analysis_name}\n".encode("utf-8"))
     with open(machine_file_path, "w", encoding="utf-8") as machine_file:
-        machine_file.write(f"{','.join(run_name for _, run_name, _ in runs_to_analyze)},count\n")
+        machine_file.write(f"{','.join(run_name for run_name, _ in runs_to_analyze)},count\n")
     # Get list of combos from big to small
     enables_list = list(itertools.product([True, False], repeat=len(runs_to_analyze)))
     enables_list.sort(key=sum, reverse=True)
     seen_fingerprints: set[fingerprint_t] = set()
     for enables in enables_list:
         # Create combo from enabled runs
-        combo = list(run_name for (_, run_name, _), enabled in zip(runs_to_analyze, enables) if enabled)
+        combo = list(run_name for (run_name, _), enabled in zip(runs_to_analyze, enables) if enabled)
         # Save combo name before editing combo
         combo_name: bytes = bytes(",".join(combo), "utf-8")
         # For each combo build list of common bugs
@@ -146,15 +104,15 @@ def build_overlap_reports(
 
 
 def build_edge_graphs(
-    analysis_name: str, runs_to_analyze: list[tuple[int, str, str]], analysis_dir: PosixPath
+    analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_dir: PosixPath
 ) -> None:
     print("Building Edge Graphs...")
     # Gather The Data
     edge_data: dict[str, tuple[tuple[list[int], list[float], list[int]], ...]] = {}
 
-    for i, (run_num, _, _) in enumerate(runs_to_analyze):
+    for i, (_, run_uuid) in enumerate(runs_to_analyze):
         report = json.loads(
-            open(REPORTS_DIR.joinpath(str(run_num)).joinpath("report.json"), "r", encoding="utf-8").read()
+            open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "r", encoding="utf-8").read()
         )
         coverage = report["coverage"]
         for target_name in coverage.keys():
@@ -181,15 +139,39 @@ def build_edge_graphs(
         plt.close()
 
 
+# Plot a run onto a given axis
+def plot_bugs(run_name: str, report_file_path: PosixPath, axis: np.ndarray) -> None:
+    # Load up all the differentials from the json
+    with open(report_file_path, "rb") as report_file:
+        report = json.load(report_file)
+    differentials = report["differentials"]
+    times: list[float] = []
+    generations: list[int] = []
+    count: list[int] = []
+    running_count: int = 0
+    for differential in differentials:
+        running_count += 1
+        generations.append(int(differential["generation"]))
+        count.append(running_count)
+        times.append(float(differential["time"]))
+    # Plot Things
+    axis[0].plot(np.array(times), np.array(count), label=run_name)
+    axis[0].set_xlabel("Time (s)")
+    axis[0].set_ylabel("Bugs")
+    axis[1].plot(np.array(generations), np.array(count))
+    axis[1].set_xlabel("Generations")
+    axis[1].set_ylabel("Bugs")
+
+
 def build_bug_graph(
-    analysis_name: str, runs_to_analyze: set[tuple[int, str, str]], analysis_dir: PosixPath
+    analysis_name: str, runs_to_analyze: list[tuple[str, str]], analysis_dir: PosixPath
 ) -> None:
     print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
-    for run_num, run_name, _ in runs_to_analyze:
-        plot_bugs(run_name, REPORTS_DIR.joinpath(str(run_num)).joinpath("report.json"), axis)
+    for run_name, run_uuid in runs_to_analyze:
+        plot_bugs(run_name, REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), axis)
 
     figure.legend(loc="upper left")
     plt.savefig(analysis_dir.joinpath("bug_graph").with_suffix(".png"), format="png")
@@ -213,18 +195,24 @@ def main() -> None:
     if not any((args.bug_count, args.edge_count, args.bug_overlap)):
         raise ValueError("At least one of --bug-count, --bug-overlap, --edge-count must be passed.")
 
-    runs_to_analyze: list[tuple[str, str]] = []
-    for report_dir in os.listdir(REPORTS_DIR):
-        runs_to_analyze.append(retrieve_data(int(report_dir)))
+    # Running of tests should be done in python
+    # Should return uuids, these are temp
+    runs_to_analyze: list[tuple[str, str]] = [
+        ("Name1", "5c483e92-0a72-422e-8afd-55bb8796bccc"),
+        ("Name2", "9b2760f8-e0dc-4a97-98a5-aa123f0dbc07"),
+    ]
+
+    for run_name, run_uuid in runs_to_analyze:
+        assert_data(run_name, run_uuid)
 
     analysis_uuid: str = str(uuid.uuid4())
     analysis_dir: PosixPath = ANALYSES_DIR.joinpath(analysis_uuid)
     os.mkdir(analysis_dir)
 
     if args.bug_count:
-        build_bug_graph(args.n, runs_to_analyze, analysis_dir)
+        build_bug_graph(args.name, runs_to_analyze, analysis_dir)
     if args.edge_count:
-        build_edge_graphs(args.n, runs_to_analyze, analysis_dir)
+        build_edge_graphs(args.name, runs_to_analyze, analysis_dir)
     if args.bug_overlap:
         build_overlap_reports(
             runs_to_analyze,

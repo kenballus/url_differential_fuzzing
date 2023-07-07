@@ -481,7 +481,7 @@ if __name__ == "__main__":
                 file=sys.stderr,
             )
 
-    _coverage_output: dict = {
+    _coverage_output: dict[str, list[dict]] = {
         _tc.name: [
             {"edges": _edges, "time": _time, "generation": _generation}
             for (_edges, _time, _generation) in _coverage_info[_i]
