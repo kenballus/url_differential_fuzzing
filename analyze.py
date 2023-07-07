@@ -20,6 +20,7 @@ ANALYSES_DIR: PosixPath = BENCHMARKING_DIR.joinpath("analyses")
 
 CONFIG_FILE_PATH: PosixPath = PosixPath("config.py")
 CONFIG_COPY_PATH: PosixPath = BENCHMARKING_DIR.joinpath("config_copy.py")
+CONFIGS_DIR: PosixPath = BENCHMARKING_DIR.joinpath("bench_configs")
 
 
 def assert_data(run_name: str, run_uuid: str) -> None:
@@ -250,6 +251,7 @@ def main() -> None:
     assert RESULTS_DIR.is_dir()
     assert ANALYSES_DIR.is_dir()
     assert REPORTS_DIR.is_dir()
+    assert CONFIGS_DIR.is_dir()
 
     # Retrieve arguments
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
@@ -276,7 +278,7 @@ def main() -> None:
     original_branch: bytes = subprocess.run(["git","branch","--show-current"], capture_output=True, check=True).stdout.strip()
 
     queued_runs: list[QueuedRun] = []
-    # Read queue file
+    # Read queue file and check validity
     with open(queue_file_path, "r") as queue_file:
         for line in queue_file.readlines():
             split_line: list[str] = line.strip().split(",")
@@ -284,17 +286,35 @@ def main() -> None:
                 raise ValueError(f"Queue line {line.strip()} has too few arguments.")
             if len(split_line) > 4:
                 raise ValueError(f"Queue line {line.strip()} has too many arguments.")
+            config: str | None = None
+            if len(split_line) == 4:
+                config = split_line[3]
+                if not CONFIGS_DIR.joinpath(config).is_file():
+                    raise ValueError(f"{config} is not a valid config in the configs directory.")
             try:
                 timeout: int = int(split_line[2])
             except ValueError as e:
                 raise ValueError(f"Timeout {split_line[2]} must be an integer") from e
-            queued_runs.append(QueuedRun(split_line[0], split_line[1], timeout, split_line[3] if len(split_line) == 4 else None))
+            queued_runs.append(QueuedRun(split_line[0], split_line[1], timeout, config))
 
+    runs_to_analyze: list[tuple[str,str]] = []
+
+    # Execute queued runs
     for queued_run in queued_runs:
-        subprocess.run(["git","checkout",queued_run.commit], capture_output=True, check=True)
+        subprocess.run(["git","checkout",queued_run.commit], check=True)
+        if queued_run.config is None:
+            shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
+        else:
+            shutil.copyfile(CONFIGS_DIR.joinpath(queued_run.config), CONFIG_FILE_PATH)
+        runs_to_analyze.append(queued_run.name, str(subprocess.run(["timeout", "--foreground", "--signal=2" , str(queued_run.timeout), "python", "diff_fuzz.py"], capture_output=True, check=True).stdout, encoding='ascii').strip())
 
     # Cleanup
+    subprocess.run(["git","switch",original_branch], capture_output=True, check=True)
+    shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
     os.remove(CONFIG_COPY_PATH)
+
+    for x in runs_to_analyze:
+        print(x)
 
     return
 
