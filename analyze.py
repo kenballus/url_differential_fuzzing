@@ -249,31 +249,7 @@ class QueuedRun:
     config: str | None
 
 
-def main() -> None:
-    assert RESULTS_DIR.is_dir()
-    assert ANALYSES_DIR.is_dir()
-    assert REPORTS_DIR.is_dir()
-    assert CONFIGS_DIR.is_dir()
-
-    # Retrieve arguments
-    parser: argparse.ArgumentParser = argparse.ArgumentParser()
-    parser.add_argument(
-        "queue_file_path", help="The path to the queue file to take runs from for the analysis"
-    )
-    parser.add_argument("--name", help="TODO: Remove", required=True)
-    parser.add_argument("--bug-count", help="Enable creation of bug count plot", action="store_true")
-    parser.add_argument("--bug-overlap", help="Enable creation of bug overlap reports", action="store_true")
-    parser.add_argument("--edge-count", help="Enable creation of edge count plot", action="store_true")
-    args: argparse.Namespace = parser.parse_args()
-
-    # ensure at least one option is enabled
-    if not any((args.bug_count, args.edge_count, args.bug_overlap)):
-        raise ValueError("At least one of --bug-count, --bug-overlap, --edge-count must be passed.")
-
-    # Check that queue file exists
-    queue_file_path = PosixPath(args.queue_file_path)
-    assert os.path.isfile(queue_file_path)
-
+def execute_runs(queue_file_path: PosixPath) -> list[tuple[str, str]]:
     # Copy the config
     assert os.path.isfile(CONFIG_FILE_PATH)
     shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
@@ -303,7 +279,7 @@ def main() -> None:
                 raise ValueError(f"Timeout {split_line[2]} must be an integer") from e
             queued_runs.append(QueuedRun(split_line[0], split_line[1], timeout, config))
 
-    runs_to_analyze: list[tuple[str, str]] = []
+    completed_runs: list[tuple[str, str]] = []
 
     # Execute queued runs
     for queued_run in queued_runs:
@@ -312,7 +288,7 @@ def main() -> None:
             shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
         else:
             shutil.copyfile(CONFIGS_DIR.joinpath(queued_run.config), CONFIG_FILE_PATH)
-        runs_to_analyze.append(
+        completed_runs.append(
             (
                 queued_run.name,
                 str(
@@ -339,19 +315,38 @@ def main() -> None:
     shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
     os.remove(CONFIG_COPY_PATH)
 
-    for x in runs_to_analyze:
-        print(x)
+    return completed_runs
 
-    return
 
-    # Running of tests should be done in python
-    # Should return uuids, these are temp
-    const_runs: list[tuple[str, str]] = [
-        ("Name1", "5c483e92-0a72-422e-8afd-55bb8796bccc"),
-        ("Name2", "9b2760f8-e0dc-4a97-98a5-aa123f0dbc07"),
-        ("Name3", "3be9388c-7829-4737-a6fe-be1b997670f7"),
-    ]
+def main() -> None:
+    assert RESULTS_DIR.is_dir()
+    assert ANALYSES_DIR.is_dir()
+    assert REPORTS_DIR.is_dir()
+    assert CONFIGS_DIR.is_dir()
 
+    # Retrieve arguments
+    parser: argparse.ArgumentParser = argparse.ArgumentParser()
+    parser.add_argument(
+        "queue_file_path", help="The path to the queue file to take runs from for the analysis"
+    )
+    parser.add_argument("--name", help="TODO: Remove", required=True)
+    parser.add_argument("--bug-count", help="Enable creation of bug count plot", action="store_true")
+    parser.add_argument("--bug-overlap", help="Enable creation of bug overlap reports", action="store_true")
+    parser.add_argument("--edge-count", help="Enable creation of edge count plot", action="store_true")
+    args: argparse.Namespace = parser.parse_args()
+
+    # ensure at least one option is enabled
+    if not any((args.bug_count, args.edge_count, args.bug_overlap)):
+        raise ValueError("At least one of --bug-count, --bug-overlap, --edge-count must be passed.")
+
+    # Check that queue file exists
+    queue_file_path = PosixPath(args.queue_file_path)
+    assert os.path.isfile(queue_file_path)
+
+    # Run!
+    runs_to_analyze: list[tuple[str, str]] = execute_runs(queue_file_path)
+
+    # Parse and assert data
     for run_name, run_uuid in runs_to_analyze:
         assert_data(run_name, run_uuid)
     try:
@@ -359,6 +354,7 @@ def main() -> None:
     except AssertionError as e:
         raise ValueError("One of the report JSON files cannot be parsed.") from e
 
+    # Generate analysis uuid
     analysis_uuid: str = str(uuid.uuid4())
     analysis_dir: PosixPath = ANALYSES_DIR.joinpath(analysis_uuid)
     os.mkdir(analysis_dir)
