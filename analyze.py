@@ -34,6 +34,11 @@ class edge_datapoint:
     time: float
     generation: int
 
+    def assert_types(self) -> None:
+        assert isinstance(self.edge_count, int)
+        assert isinstance(self.time, float)
+        assert isinstance(self.generation, int)
+
 
 @dataclass
 class bug_datapoint:
@@ -41,37 +46,52 @@ class bug_datapoint:
     time: float
     generation: int
 
+    def assert_types(self) -> None:
+        assert isinstance(self.bug_count, int)
+        assert isinstance(self.time, float)
+        assert isinstance(self.generation, int)
+
 
 def parse_reports(
     runs_to_analyze: list[tuple[str, str]]
 ) -> tuple[dict[str, list[bug_datapoint]], dict[str, tuple[list[edge_datapoint], ...]]]:
-    bug_data: dict[str, list[bug_datapoint]] = {}
-    edge_data: dict[str, tuple[list[edge_datapoint], ...]] = {}
+    all_bug_data: dict[str, list[bug_datapoint]] = {}
+    all_edge_data: dict[str, tuple[list[edge_datapoint], ...]] = {}
     for i, (_, run_uuid) in enumerate(runs_to_analyze):
         with open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "rb") as report_file:
             report_json: dict = json.load(report_file)
+            assert isinstance(report_json, dict)
+
         # Parse the JSON for bug data
         differentials_json: list[dict] = report_json["differentials"]
+        assert isinstance(differentials_json, list)
         differentials: list[bug_datapoint] = []
         running_count: int = 0
         for differential_json in differentials_json:
+            assert isinstance(differential_json, dict)
             running_count += 1
-            differentials.append(
-                bug_datapoint(running_count, differential_json["time"], differential_json["generation"])
+            bug_data: bug_datapoint = bug_datapoint(
+                running_count, differential_json["time"], differential_json["generation"]
             )
-        bug_data[run_uuid] = differentials
+            bug_data.assert_types()
+            differentials.append(bug_data)
+        all_bug_data[run_uuid] = differentials
+
         # Parse the JSON for edge data
         coverage_json: dict[str, list[dict]] = report_json["coverage"]
+        assert isinstance(coverage_json, dict)
         for target_name in coverage_json.keys():
-            if target_name not in edge_data:
-                edge_data[target_name] = tuple([] for _ in runs_to_analyze)
+            assert isinstance(target_name, str)
+            if target_name not in all_edge_data:
+                all_edge_data[target_name] = tuple([] for _ in runs_to_analyze)
             for data_point_json in coverage_json[target_name]:
-                edge_data[target_name][i].append(
-                    edge_datapoint(
-                        data_point_json["edges"], data_point_json["time"], data_point_json["generation"]
-                    )
+                assert isinstance(data_point_json, dict)
+                edge_data: edge_datapoint = edge_datapoint(
+                    data_point_json["edges"], data_point_json["time"], data_point_json["generation"]
                 )
-    return bug_data, edge_data
+                edge_data.assert_types()
+                all_edge_data[target_name][i].append(edge_data)
+    return all_bug_data, all_edge_data
 
 
 # ????
@@ -238,12 +258,15 @@ def main() -> None:
     runs_to_analyze: list[tuple[str, str]] = [
         ("Name1", "5c483e92-0a72-422e-8afd-55bb8796bccc"),
         ("Name2", "9b2760f8-e0dc-4a97-98a5-aa123f0dbc07"),
+        ("Name3", "3be9388c-7829-4737-a6fe-be1b997670f7"),
     ]
 
     for run_name, run_uuid in runs_to_analyze:
         assert_data(run_name, run_uuid)
-
-    bug_data, edge_data = parse_reports(runs_to_analyze)
+    try:
+        bug_data, edge_data = parse_reports(runs_to_analyze)
+    except AssertionError as e:
+        raise ValueError("One of the report JSON files cannot be parsed.") from e
 
     analysis_uuid: str = str(uuid.uuid4())
     analysis_dir: PosixPath = ANALYSES_DIR.joinpath(analysis_uuid)
