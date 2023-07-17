@@ -20,7 +20,7 @@ import shutil
 import base64
 import time
 from pathlib import PosixPath
-from typing import Callable
+from typing import Callable, Union
 
 
 from tqdm import tqdm  # type: ignore
@@ -481,14 +481,18 @@ if __name__ == "__main__":
                 file=sys.stderr,
             )
 
-    _coverage_output: dict[str, list[dict]] = {
+    json_t = Union[str, int, float, "json_obj_t", "json_list_t"]
+    json_obj_t = dict[str, json_t]
+    json_list_t = list[json_t]
+
+    _coverage_output: json_obj_t = {
         _tc.name: [
             {"edges": _edges, "time": _time, "generation": _generation}
             for (_edges, _time, _generation) in _coverage_info[_i]
         ]
         for _i, _tc in enumerate(TARGET_CONFIGS)
     }
-    _differentials_output: list[dict] = [
+    _differentials_output: json_list_t = [
         {
             "differential": str(base64.b64encode(_differential), "ascii"),
             "path": str(_run_results_dir.joinpath(str(hash(_differential))).resolve()),
@@ -497,7 +501,11 @@ if __name__ == "__main__":
         }
         for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
     ]
-    _output: dict = {"uuid": _run_id, "coverage": _coverage_output, "differentials": _differentials_output}
+    _output: json_obj_t = {
+        "uuid": _run_id,
+        "coverage": _coverage_output,
+        "differentials": _differentials_output,
+    }
     with open(REPORTS_DIR.joinpath(_run_id).with_suffix(".json"), "w", encoding="latin-1") as report_file:
         report_file.write(json.dumps(_output, indent=4))
 

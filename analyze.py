@@ -9,6 +9,7 @@ import base64
 import sys
 from pathlib import PosixPath
 from dataclasses import dataclass
+from typing import Union
 
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
@@ -57,6 +58,11 @@ class BugDatapoint:
     generation: int
 
 
+json_t = Union[str, int, float, "json_obj_t", "json_list_t"]
+json_obj_t = dict[str, json_t]
+json_list_t = list[json_t]
+
+
 def parse_reports(
     uuids_to_names: dict[str, str]
 ) -> tuple[dict[str, list[BugDatapoint]], dict[str, dict[str, list[EdgeDatapoint]]]]:
@@ -64,11 +70,11 @@ def parse_reports(
     all_edge_data: dict[str, dict[str, list[EdgeDatapoint]]] = {}
     for run_uuid in uuids_to_names:
         with open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "rb") as report_file:
-            report_json: dict = json.load(report_file)
+            report_json: json_obj_t = json.load(report_file)
             assert isinstance(report_json, dict)
 
         # Parse the JSON for bug datas
-        differentials_json: list[dict] = report_json["differentials"]
+        differentials_json: json_t = report_json["differentials"]
         assert isinstance(differentials_json, list)
         differentials: list[BugDatapoint] = []
         running_count: int = 0
@@ -84,13 +90,15 @@ def parse_reports(
         all_bug_data[run_uuid] = differentials
 
         # Parse the JSON for edge data
-        coverage_json: dict[str, list[dict]] = report_json["coverage"]
+        coverage_json: json_t = report_json["coverage"]
         assert isinstance(coverage_json, dict)
         for target_name in coverage_json.keys():
             assert isinstance(target_name, str)
             if target_name not in all_edge_data:
                 all_edge_data[target_name] = {run_uuid: [] for run_uuid in uuids_to_names}
-            for data_point_json in coverage_json[target_name]:
+            coverage_list: json_t = coverage_json[target_name]
+            assert isinstance(coverage_list, list)
+            for data_point_json in coverage_list:
                 assert isinstance(data_point_json, dict)
                 assert isinstance(data_point_json["edges"], int)
                 assert isinstance(data_point_json["time"], float)
@@ -139,7 +147,6 @@ def build_overlap_report(
     uuids_to_names: dict[str, str],
     machine_file_path: PosixPath,
 ) -> None:
-    print("Building Overlap Reports...")
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
     for run_uuid in uuids_to_names:
         byte_differentials: list[bytes] = read_byte_differentials(RESULTS_DIR.joinpath(run_uuid))
@@ -156,10 +163,9 @@ def build_overlap_report(
         for enables in list(itertools.product([True, False], repeat=len(uuid_list)))
     )
     combos_list.sort(key=len, reverse=True)
-    seen_fingerprints: set[fingerprint_t] = set()
     for combo in combos_list:
         # Save combo name before editing combo
-        combo_name: str = ",".join(uuids_to_names[run_uuid] for run_uuid in combo)
+        combo_name: str = "/".join(uuids_to_names[run_uuid] for run_uuid in combo)
         # For each combo build list of common bugs
         if not combo:
             break
@@ -170,17 +176,20 @@ def build_overlap_report(
         # Write to the machine readable file
         with open(machine_file_path, "ab") as machine_file:
             machine_file.write(f"{combo_name},{len(common)}\n".encode("latin-1"))
-        # Take away already used bugs and mark bugs as used up
-        unused_common: set[fingerprint_t] = common - seen_fingerprints
-        seen_fingerprints = seen_fingerprints.union(unused_common)
         # Write to the summary file in a readable byte format
         print("-------------------------------------------", file=sys.stderr)
         print(combo_name, file=sys.stderr)
-        print("Total: " + str(len(unused_common)), file=sys.stderr)
+        print("Total: " + str(len(common)), file=sys.stderr)
         print("-------------------------------------------", file=sys.stderr)
-        for x in unused_common:
+        # Find an example in base64 for each trace common between the runs
+        example_base64_bytes: list[str] = list(
+            str(base64.b64encode(first_run[trace]), "latin-1") for trace in common
+        )
+        # Sort examples and print them
+        example_base64_bytes.sort()
+        for example_base64 in example_base64_bytes:
             print("***", end="", file=sys.stderr)
-            print(str(base64.b64encode(first_run[x]), "latin-1"))
+            print(example_base64, end="", file=sys.stderr)
             print("***", file=sys.stderr)
 
 
@@ -190,8 +199,6 @@ def build_edge_graphs(
     analysis_dir: PosixPath,
     edge_data: dict[str, dict[str, list[EdgeDatapoint]]],
 ) -> None:
-    print("Building Edge Graphs...")
-
     # Build The Graphs
     for target_name, runs in edge_data.items():
         figure, axis = plt.subplots(2, 1, constrained_layout=True)
@@ -239,7 +246,6 @@ def build_bug_graph(
     analysis_dir: PosixPath,
     bug_data: dict[str, list[BugDatapoint]],
 ) -> None:
-    print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
@@ -333,10 +339,10 @@ def main() -> None:
 
     # Retrieve arguments
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
+    parser.add_argument("name", help="The name of the analysis to put on the graphs")
     parser.add_argument(
         "queue_file_path", help="The path to the queue file to take runs from for the analysis"
     )
-    parser.add_argument("--name", help="TODO: Remove", required=True)  # TODO: Remove!
     parser.add_argument("--bug-count", help="Enable creation of bug count plot", action="store_true")
     parser.add_argument("--bug-overlap", help="Enable creation of bug overlap reports", action="store_true")
     parser.add_argument("--edge-count", help="Enable creation of edge count plot", action="store_true")
