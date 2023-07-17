@@ -5,6 +5,8 @@ import itertools
 import uuid
 import argparse
 import subprocess
+import base64
+import sys
 from pathlib import PosixPath
 from dataclasses import dataclass
 
@@ -23,8 +25,9 @@ CONFIG_COPY_PATH: PosixPath = BENCHMARKING_DIR.joinpath("config_copy.py")
 CONFIGS_DIR: PosixPath = BENCHMARKING_DIR.joinpath("bench_configs")
 
 
-def assert_data(run_name: str, run_uuid: str) -> None:
-    # Check directories
+# Check that the files exported by a given run of the fuzzer actually exist
+def check_fuzz_output(run_name: str, run_uuid: str) -> None:
+    # Check for report file
     if not os.path.isfile(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json")):
         raise FileNotFoundError(f"{run_name} doesn't have a report file!")
 
@@ -33,52 +36,50 @@ def assert_data(run_name: str, run_uuid: str) -> None:
         raise FileNotFoundError(f"{run_name} doesn't have a differentials folder!")
 
 
+# Data class for holding information about how many cumulative unique edges of each parser were found in each generation and at what time.
+# Stored in JSON in the coverage list which has a list for each parser, these lists consist of JSON objects for each generation which record generation, time, and
+# number of unique edges uncovered in that parser up to that generation.
 @dataclass
-class edge_datapoint:
+class EdgeDatapoint:
     edge_count: int
     time: float
     generation: int
 
-    def assert_types(self) -> None:
-        assert isinstance(self.edge_count, int)
-        assert isinstance(self.time, float)
-        assert isinstance(self.generation, int)
 
-
+# Data class for holding information about how many cumulative unique bugs were found by the run at times when new bugs were found. Records the
+# cumulative number of bugs found up to that point, the time at which the latest included bug was found, and the generation at which the latest included bug was found.
+# Stored in JSON in the differentials list which has a JSON object for every bug found during the run sorted by time found in ascending order. Each JSON object has an
+# example of the bug base64 encoded, the path to a file where an example of the bug is stored, the time at which the bug was found, and the generation when the bug was found.
 @dataclass
-class bug_datapoint:
+class BugDatapoint:
     bug_count: int
     time: float
     generation: int
 
-    def assert_types(self) -> None:
-        assert isinstance(self.bug_count, int)
-        assert isinstance(self.time, float)
-        assert isinstance(self.generation, int)
-
 
 def parse_reports(
-    runs_to_analyze: list[tuple[str, str]]
-) -> tuple[dict[str, list[bug_datapoint]], dict[str, tuple[list[edge_datapoint], ...]]]:
-    all_bug_data: dict[str, list[bug_datapoint]] = {}
-    all_edge_data: dict[str, tuple[list[edge_datapoint], ...]] = {}
-    for i, (_, run_uuid) in enumerate(runs_to_analyze):
+    uuids_to_names: dict[str, str]
+) -> tuple[dict[str, list[BugDatapoint]], dict[str, dict[str, list[EdgeDatapoint]]]]:
+    all_bug_data: dict[str, list[BugDatapoint]] = {}
+    all_edge_data: dict[str, dict[str, list[EdgeDatapoint]]] = {}
+    for run_uuid in uuids_to_names:
         with open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "rb") as report_file:
             report_json: dict = json.load(report_file)
             assert isinstance(report_json, dict)
 
-        # Parse the JSON for bug data
+        # Parse the JSON for bug datas
         differentials_json: list[dict] = report_json["differentials"]
         assert isinstance(differentials_json, list)
-        differentials: list[bug_datapoint] = []
+        differentials: list[BugDatapoint] = []
         running_count: int = 0
         for differential_json in differentials_json:
             assert isinstance(differential_json, dict)
             running_count += 1
-            bug_data: bug_datapoint = bug_datapoint(
+            assert isinstance(differential_json["time"], float)
+            assert isinstance(differential_json["generation"], int)
+            bug_data: BugDatapoint = BugDatapoint(
                 running_count, differential_json["time"], differential_json["generation"]
             )
-            bug_data.assert_types()
             differentials.append(bug_data)
         all_bug_data[run_uuid] = differentials
 
@@ -88,21 +89,23 @@ def parse_reports(
         for target_name in coverage_json.keys():
             assert isinstance(target_name, str)
             if target_name not in all_edge_data:
-                all_edge_data[target_name] = tuple([] for _ in runs_to_analyze)
+                all_edge_data[target_name] = {run_uuid: [] for run_uuid in uuids_to_names}
             for data_point_json in coverage_json[target_name]:
                 assert isinstance(data_point_json, dict)
-                edge_data: edge_datapoint = edge_datapoint(
+                assert isinstance(data_point_json["edges"], int)
+                assert isinstance(data_point_json["time"], float)
+                assert isinstance(data_point_json["generation"], int)
+                edge_data: EdgeDatapoint = EdgeDatapoint(
                     data_point_json["edges"], data_point_json["time"], data_point_json["generation"]
                 )
-                edge_data.assert_types()
-                all_edge_data[target_name][i].append(edge_data)
+                all_edge_data[target_name][run_uuid].append(edge_data)
     return all_bug_data, all_edge_data
 
 
-# ????
-def get_fingerprint_differentials(
+# Reads byte differentials from the given differentials list and gives them back in a list
+def read_byte_differentials(
     differentials_folder: PosixPath,
-) -> dict[fingerprint_t, bytes]:
+) -> list[bytes]:
     # Read the bugs from files
     byte_differentials: list[bytes] = []
     differentials = os.listdir(differentials_folder)
@@ -111,7 +114,12 @@ def get_fingerprint_differentials(
         differential_file_name = differentials_folder.joinpath(diff)
         with open(differential_file_name, "rb") as differential_file:
             byte_differentials.append(differential_file.read())
+    return byte_differentials
 
+
+# Takes a list of byte differentials and returns a dictionary of all the trace fingerprints these byte differentials result in.
+# The dictionary maps each found fingerprint to a byte differential example.
+def trace_byte_differentials(byte_differentials: list[bytes]) -> dict[fingerprint_t, bytes]:
     # Trace the bugs
     run_dir: PosixPath = PosixPath("/tmp").joinpath("analyzer")
     if os.path.exists(run_dir):
@@ -121,65 +129,66 @@ def get_fingerprint_differentials(
     shutil.rmtree(run_dir)
 
     # Record
-    fingerprints_bytes = {}
+    fingerprints_to_bytes = {}
     for fingerprint, byte_differential in zip(fingerprints, byte_differentials):
-        fingerprints_bytes[fingerprint] = byte_differential
-    return fingerprints_bytes
+        fingerprints_to_bytes[fingerprint] = byte_differential
+    return fingerprints_to_bytes
 
 
-def build_overlap_reports(
-    runs_to_analyze: list[tuple[str, str]],
-    summary_file_path: PosixPath,
+def build_overlap_report(
+    uuids_to_names: dict[str, str],
     machine_file_path: PosixPath,
-    analysis_name: str,
 ) -> None:
     print("Building Overlap Reports...")
     run_differentials: dict[str, dict[fingerprint_t, bytes]] = {}
-    for run_name, run_uuid in runs_to_analyze:
-        run_differentials[run_name] = get_fingerprint_differentials(RESULTS_DIR.joinpath(run_uuid))
-    # Setup analysis file and machine file
-    with open(summary_file_path, "wb") as analysis_file:
-        analysis_file.write(f"Analysis: {analysis_name}\n".encode("utf-8"))
-    with open(machine_file_path, "w", encoding="utf-8") as machine_file:
-        machine_file.write(f"{','.join(run_name for run_name, _ in runs_to_analyze)},count\n")
+    for run_uuid in uuids_to_names:
+        byte_differentials: list[bytes] = read_byte_differentials(RESULTS_DIR.joinpath(run_uuid))
+        run_differentials[run_uuid] = trace_byte_differentials(byte_differentials)
+    # Setup analysis machine file
+    uuid_list: list[str] = list(uuids_to_names)
+    with open(machine_file_path, "wb") as machine_file:
+        machine_file.write(
+            f"{','.join(uuids_to_names[run_uuid] for run_uuid in uuid_list)},count\n".encode("latin-1")
+        )
     # Get list of combos from big to small
-    enables_list = list(itertools.product([True, False], repeat=len(runs_to_analyze)))
-    enables_list.sort(key=sum, reverse=True)
+    combos_list: list[list[str]] = list(
+        list(run_uuid for run_uuid, enabled in zip(uuid_list, enables) if enabled)
+        for enables in list(itertools.product([True, False], repeat=len(uuid_list)))
+    )
+    combos_list.sort(key=len, reverse=True)
     seen_fingerprints: set[fingerprint_t] = set()
-    for enables in enables_list:
-        # Create combo from enabled runs
-        combo = list(run_name for (run_name, _), enabled in zip(runs_to_analyze, enables) if enabled)
+    for combo in combos_list:
         # Save combo name before editing combo
-        combo_name: bytes = bytes(",".join(combo), "utf-8")
+        combo_name: str = ",".join(uuids_to_names[run_uuid] for run_uuid in combo)
         # For each combo build list of common bugs
         if not combo:
             break
         first_run: dict[fingerprint_t, bytes] = run_differentials[combo.pop()]
         common: set[fingerprint_t] = set(first_run.keys())
-        for run_name in combo:
-            common = common.intersection(run_differentials[run_name].keys())
+        for run_uuid in combo:
+            common = common.intersection(run_differentials[run_uuid].keys())
         # Write to the machine readable file
-        with open(machine_file_path, "a", encoding="utf-8") as machine_file:
-            machine_file.write(f"{','.join(str(enable) for enable in enables)},{len(common)}\n")
+        with open(machine_file_path, "ab") as machine_file:
+            machine_file.write(f"{combo_name},{len(common)}\n".encode("latin-1"))
         # Take away already used bugs and mark bugs as used up
-        unused_common = common - seen_fingerprints
+        unused_common: set[fingerprint_t] = common - seen_fingerprints
         seen_fingerprints = seen_fingerprints.union(unused_common)
         # Write to the summary file in a readable byte format
-        with open(summary_file_path, "ab") as comparison_file:
-            comparison_file.write(b"-------------------------------------------\n")
-            comparison_file.write(combo_name + b"\n")
-            comparison_file.write(b"Total: " + bytes(str(len(unused_common)), "utf-8") + b"\n")
-            comparison_file.write(b"-------------------------------------------\n")
-            comparison_file.write(b"***")
-            comparison_file.write(b"***\n***".join(first_run[x] for x in unused_common))
-            comparison_file.write(b"***\n")
+        print("-------------------------------------------", file=sys.stderr)
+        print(combo_name, file=sys.stderr)
+        print("Total: " + str(len(unused_common)), file=sys.stderr)
+        print("-------------------------------------------", file=sys.stderr)
+        for x in unused_common:
+            print("***", end="", file=sys.stderr)
+            print(str(base64.b64encode(first_run[x]), "latin-1"))
+            print("***", file=sys.stderr)
 
 
 def build_edge_graphs(
     analysis_name: str,
-    runs_to_analyze: list[tuple[str, str]],
+    uuids_to_names: dict[str, str],
     analysis_dir: PosixPath,
-    edge_data: dict[str, tuple[list[edge_datapoint], ...]],
+    edge_data: dict[str, dict[str, list[EdgeDatapoint]]],
 ) -> None:
     print("Building Edge Graphs...")
 
@@ -191,14 +200,15 @@ def build_edge_graphs(
         axis[0].set_ylabel("Edges")
         axis[1].set_xlabel("Generations")
         axis[1].set_ylabel("Edges")
-        for i, run in enumerate(runs):
+        for run_uuid in runs:
             axis[0].plot(
-                np.array([point.time for point in run]),
-                np.array([point.edge_count for point in run]),
-                label=runs_to_analyze[i][0],
+                np.array([point.time for point in runs[run_uuid]]),
+                np.array([point.edge_count for point in runs[run_uuid]]),
+                label=uuids_to_names[run_uuid],
             )
             axis[1].plot(
-                np.array([point.generation for point in run]), np.array([point.edge_count for point in run])
+                np.array([point.generation for point in runs[run_uuid]]),
+                np.array([point.edge_count for point in runs[run_uuid]]),
             )
         figure.legend(loc="upper left")
         plt.savefig(analysis_dir.joinpath(f"edges_{target_name}").with_suffix(".png"), format="png")
@@ -206,7 +216,7 @@ def build_edge_graphs(
 
 
 # Plot a run onto a given axis
-def plot_bugs(run_name: str, differentials: list[bug_datapoint], axis: np.ndarray) -> None:
+def plot_bugs(run_name: str, differentials: list[BugDatapoint], axis: np.ndarray) -> None:
     # Plot Things
     axis[0].plot(
         np.array([differential.time for differential in differentials]),
@@ -225,15 +235,15 @@ def plot_bugs(run_name: str, differentials: list[bug_datapoint], axis: np.ndarra
 
 def build_bug_graph(
     analysis_name: str,
-    runs_to_analyze: list[tuple[str, str]],
+    uuids_to_names: dict[str, str],
     analysis_dir: PosixPath,
-    bug_data: dict[str, list[bug_datapoint]],
+    bug_data: dict[str, list[BugDatapoint]],
 ) -> None:
     print("Building Bug Graph...")
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
 
-    for run_name, run_uuid in runs_to_analyze:
+    for run_uuid, run_name in uuids_to_names.items():
         plot_bugs(run_name, bug_data[run_uuid], axis)
 
     figure.legend(loc="upper left")
@@ -249,7 +259,7 @@ class QueuedRun:
     config: str | None
 
 
-def execute_runs(queue_file_path: PosixPath) -> list[tuple[str, str]]:
+def execute_runs(queue_file_path: PosixPath) -> dict[str, str]:
     # Copy the config
     assert os.path.isfile(CONFIG_FILE_PATH)
     shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
@@ -279,7 +289,7 @@ def execute_runs(queue_file_path: PosixPath) -> list[tuple[str, str]]:
                 raise ValueError(f"Timeout {split_line[2]} must be an integer") from e
             queued_runs.append(QueuedRun(split_line[0], split_line[1], timeout, config))
 
-    completed_runs: list[tuple[str, str]] = []
+    uuids_to_names: dict[str, str] = {}
 
     # Execute queued runs
     for queued_run in queued_runs:
@@ -288,34 +298,31 @@ def execute_runs(queue_file_path: PosixPath) -> list[tuple[str, str]]:
             shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
         else:
             shutil.copyfile(CONFIGS_DIR.joinpath(queued_run.config), CONFIG_FILE_PATH)
-        completed_runs.append(
-            (
-                queued_run.name,
-                str(
-                    subprocess.run(
-                        [
-                            "timeout",
-                            "--foreground",
-                            "--signal=2",
-                            "--preserve-status",
-                            str(queued_run.timeout),
-                            "python",
-                            "diff_fuzz.py",
-                        ],
-                        capture_output=True,
-                        check=True,
-                    ).stdout,
-                    encoding="ascii",
-                ).strip(),
-            )
-        )
+        uuids_to_names[
+            str(
+                subprocess.run(
+                    [
+                        "timeout",
+                        "--foreground",
+                        "--signal=2",
+                        "--preserve-status",
+                        str(queued_run.timeout),
+                        "python",
+                        "diff_fuzz.py",
+                    ],
+                    capture_output=True,
+                    check=True,
+                ).stdout,
+                encoding="ascii",
+            ).strip()
+        ] = queued_run.name
 
     # Cleanup
     subprocess.run(["git", "switch", original_branch], capture_output=True, check=True)
     shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
     os.remove(CONFIG_COPY_PATH)
 
-    return completed_runs
+    return uuids_to_names
 
 
 def main() -> None:
@@ -329,7 +336,7 @@ def main() -> None:
     parser.add_argument(
         "queue_file_path", help="The path to the queue file to take runs from for the analysis"
     )
-    parser.add_argument("--name", help="TODO: Remove", required=True)
+    parser.add_argument("--name", help="TODO: Remove", required=True)  # TODO: Remove!
     parser.add_argument("--bug-count", help="Enable creation of bug count plot", action="store_true")
     parser.add_argument("--bug-overlap", help="Enable creation of bug overlap reports", action="store_true")
     parser.add_argument("--edge-count", help="Enable creation of edge count plot", action="store_true")
@@ -344,13 +351,13 @@ def main() -> None:
     assert os.path.isfile(queue_file_path)
 
     # Run!
-    runs_to_analyze: list[tuple[str, str]] = execute_runs(queue_file_path)
+    uuids_to_names: dict[str, str] = execute_runs(queue_file_path)
 
     # Parse and assert data
-    for run_name, run_uuid in runs_to_analyze:
-        assert_data(run_name, run_uuid)
+    for run_uuid, run_name in uuids_to_names.items():
+        check_fuzz_output(run_name, run_uuid)
     try:
-        bug_data, edge_data = parse_reports(runs_to_analyze)
+        bug_data, edge_data = parse_reports(uuids_to_names)
     except AssertionError as e:
         raise ValueError("One of the report JSON files cannot be parsed.") from e
 
@@ -360,15 +367,13 @@ def main() -> None:
     os.mkdir(analysis_dir)
 
     if args.bug_count:
-        build_bug_graph(args.name, runs_to_analyze, analysis_dir, bug_data)
+        build_bug_graph(args.name, uuids_to_names, analysis_dir, bug_data)
     if args.edge_count:
-        build_edge_graphs(args.name, runs_to_analyze, analysis_dir, edge_data)
+        build_edge_graphs(args.name, uuids_to_names, analysis_dir, edge_data)
     if args.bug_overlap:
-        build_overlap_reports(
-            runs_to_analyze,
-            analysis_dir.joinpath("overlap_summary").with_suffix(".txt"),
+        build_overlap_report(
+            uuids_to_names,
             analysis_dir.joinpath("overlap_machine").with_suffix(".csv"),
-            args.name,
         )
 
     print(f"Analysis done! See {analysis_dir.resolve()} for results")

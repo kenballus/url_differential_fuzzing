@@ -498,7 +498,7 @@ if __name__ == "__main__":
         for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
     ]
     _output: dict = {"uuid": _run_id, "coverage": _coverage_output, "differentials": _differentials_output}
-    with open(REPORTS_DIR.joinpath(_run_id).with_suffix(".json"), "w", encoding="utf-8") as report_file:
+    with open(REPORTS_DIR.joinpath(_run_id).with_suffix(".json"), "w", encoding="latin-1") as report_file:
         report_file.write(json.dumps(_output, indent=4))
 
     print(_run_id)
