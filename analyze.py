@@ -8,16 +8,11 @@ import subprocess
 import sys
 from pathlib import PosixPath
 from dataclasses import dataclass
-from typing import Union
 
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 
-from diff_fuzz import trace_batch, fingerprint_t
-
-json_t = Union[str, int, float, "json_obj_t", "json_list_t"]
-json_obj_t = dict[str, json_t]
-json_list_t = list[json_t]
+from diff_fuzz import trace_batch, fingerprint_t, json_t, json_obj_t
 
 BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
 RESULTS_DIR: PosixPath = PosixPath("results")
