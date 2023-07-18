@@ -157,7 +157,7 @@ def build_overlap_report(
         for enables in list(itertools.product([True, False], repeat=len(uuid_list)))
     )
     combos_list.sort(key=len, reverse=True)
-    combo_info: list[tuple[str, set[fingerprint_t]]] = []
+    combo_name_to_traces: dict[str, set[fingerprint_t]] = {}
     for combo in combos_list:
         # Save combo name before editing combo
         combo_name: str = "/".join(uuids_to_names[run_uuid] for run_uuid in combo)
@@ -168,14 +168,15 @@ def build_overlap_report(
         common_traces: set[fingerprint_t] = set(first_run.keys())
         for run_uuid in combo:
             common_traces = common_traces.intersection(run_differentials[run_uuid].keys())
-        combo_info.append((combo_name, common_traces))
+        combo_name_to_traces[combo_name] = common_traces
 
     # Write to the machine readable file
     with open(machine_file_path, "wb") as machine_file:
         machine_file.write("Included runs,Common bug count\n".encode("latin-1"))
         machine_file.write(
             "\n".join(
-                f"{combo_name},{len(common_traces)}" for (combo_name, common_traces) in combo_info
+                f"{combo_name},{len(common_traces)}"
+                for combo_name, common_traces in combo_name_to_traces.items()
             ).encode("latin-1")
         )
 
@@ -186,7 +187,7 @@ def build_overlap_report(
             trace_examples[trace] = traces_to_bytes[trace]
 
     # Write to the stderr file in a readable format
-    for combo_name, common_traces in combo_info:
+    for combo_name, common_traces in combo_name_to_traces.items():
         print("-------------------------------------------", file=sys.stderr)
         print(combo_name, file=sys.stderr)
         print("Total: " + str(len(common_traces)), file=sys.stderr)
