@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 
-from diff_fuzz import trace_batch, fingerprint_t, json_t
+from diff_fuzz import trace_batch, fingerprint_t, json_t, EdgeDatapoint
 
 BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
 RESULTS_DIR: PosixPath = PosixPath("results")
@@ -33,16 +33,6 @@ def check_fuzz_output(run_name: str, run_uuid: str) -> None:
     # Check for results folder
     if not os.path.isdir(RESULTS_DIR.joinpath(run_uuid)):
         raise FileNotFoundError(f"{run_name} doesn't have a differentials folder!")
-
-
-# Data class for holding information about how many cumulative unique edges of each parser were found in each generation and at what time.
-# Stored in JSON in the coverage list which has a list for each parser, these lists consist of JSON objects for each generation which record generation, time, and
-# number of unique edges uncovered in that parser up to that generation.
-@dataclass
-class EdgeDatapoint:
-    edge_count: int
-    time: float
-    generation: int
 
 
 # Data class for holding information about how many cumulative unique bugs were found by the run at times when new bugs were found. Records the
@@ -262,7 +252,7 @@ class QueuedRun:
     config_file: PosixPath
 
 
-def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:  # TODO: Add back optional
+def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
     queued_runs: list[QueuedRun] = []
     # Read queue file and check validity
     with open(queue_file_path, "r", encoding="ascii") as queue_file:
