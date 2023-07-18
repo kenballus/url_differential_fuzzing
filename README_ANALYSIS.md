@@ -86,4 +86,4 @@ Each section represents a combo and is headed by the list of runs included in th
 
 Every section will list the total number of bugs common between the runs in the combo.
 
-In each section, the stdout will then list all of those bugs in base64 encoded form. Each line in the section will have 1 bug.
+In each section, the stdout will then list an example input for each of those bugs. Each line in the section will have 1 bug.

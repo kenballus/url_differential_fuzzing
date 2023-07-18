@@ -5,7 +5,6 @@ import itertools
 import uuid
 import argparse
 import subprocess
-import base64
 import sys
 from pathlib import PosixPath
 from dataclasses import dataclass
@@ -180,11 +179,11 @@ def build_overlap_report(
             ).encode("latin-1")
         )
 
-    # Choose examples for every trace and base64 them
-    trace_examples: dict[fingerprint_t, str] = {}
+    # Choose examples for every trace
+    trace_examples: dict[fingerprint_t, bytes] = {}
     for traces_to_bytes in run_differentials.values():
         for trace in traces_to_bytes:
-            trace_examples[trace] = str(base64.b64encode(traces_to_bytes[trace]), "latin-1")
+            trace_examples[trace] = traces_to_bytes[trace]
 
     # Write to the stderr file in a readable format
     for combo_name, common_traces in combo_info:
@@ -192,12 +191,12 @@ def build_overlap_report(
         print(combo_name, file=sys.stderr)
         print("Total: " + str(len(common_traces)), file=sys.stderr)
         print("-------------------------------------------", file=sys.stderr)
-        # Find an example in base64 for each trace common between the runs
-        common_base64_examples: list[str] = list(trace_examples[trace] for trace in common_traces)
+        # Find an example for each trace common between the runs
+        common_examples: list[str] = list(str(trace_examples[trace])[2:-1] for trace in common_traces)
         # Sort examples and print them
-        common_base64_examples.sort()
-        for example_base64 in common_base64_examples:
-            print(example_base64, file=sys.stderr)
+        common_examples.sort()
+        for example in common_examples:
+            print(example, file=sys.stderr)
 
 
 def build_edge_graphs(
