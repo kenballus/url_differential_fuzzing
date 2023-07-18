@@ -1,5 +1,5 @@
-.PHONY: all format typecheck lint
-all: config format typecheck lint
+.PHONY: all format typecheck lint benchmarking
+all: config format typecheck lint benchmarking
 	python3 diff_fuzz.py
 
 config:
@@ -13,3 +13,9 @@ typecheck:
 
 lint:
 	pylint --disable=line-too-long,missing-module-docstring,invalid-name,missing-function-docstring,missing-class-docstring,consider-using-with,too-many-locals,too-many-branches *.py
+
+benchmarking:
+	[ -e benchmarking ] || mkdir benchmarking
+	[ -e benchmarking/bench_configs ] || mkdir benchmarking/bench_configs
+	[ -e benchmarking/queues ] || mkdir benchmarking/queues
+	[ -e benchmarking/analyses ] || mkdir benchmarking/analyses

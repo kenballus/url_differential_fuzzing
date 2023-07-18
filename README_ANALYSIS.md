@@ -2,7 +2,7 @@
 
 ## Set-Up
 
-The benchmarking module has to be setup with appropriate empty folders. To do this, run `make` in the benchmarking directory.
+The benchmarking module has to be setup with appropriate empty folders. To do this you can run `make` or run `make benchmarking` to only get the folders needed for benchmarking.
 
 ## Benchmarking Queues
 
@@ -14,9 +14,9 @@ Tests can be added to a queue as follows:
 
 Each test will be run on `commit_hash` with config `configfile`.
 
-`configfile` must correspond to the name of a config file in the bench_configs folder.
+`configfile` is optional and must correspond to the name of a config file in the benchmarking/bench_configs folder.
 
-If no config file is specified then the test will be run on the current config file.
+If no config file is specified then the test will be run on the current config file in the main directory.
 
 Each test will be forcefully ended after `timeout` seconds have elapsed or will run out of mutation candidates.
 
@@ -30,33 +30,35 @@ Test C,b7aa710177b48a680e97d9851b34bcab366626cf,30,rfc_url.py
 
 ## How to run
 
-Run `./run_benchmarks.sh -n name_of_analysis [-b] [-e] [-v] < queue_file`.
+First ensure that there are no uncommited changes in git.
 
-`name_of_analysis` will be the label for the final analysis graph and text output.
+Run `python analyze.py [--bug-count] [--edge-count] [--bug-overlap] name_of_analysis queue_file`.
+
+`name_of_analysis` will be the label for the final analysis graphs.
 
 `queue_file` should be a completed benchmarking queue file that contains all the tests you want to compare.
 
 It is suggested you keep benchmarking queue files in the queues directory but they can be kept anywhere.
 
-`[-b] [-e] [-v]` are optional flags that determine what type of analyses are done on the runs. These flags are detailed in the output section.
+`[--bug-count] [--edge-count] [--bug-overlap]` are optional flags that determine what type of analyses are done on the runs. These flags are detailed in the output section.
 
 At least one of these flags must be enabled to do any analysis.
 
 ## Output
 
-Progress will be kept in records.txt and analysis results will be saved in the analyses directory under a uuid.
+Analysis results will be saved in the analyses directory in a folder named by uuid.
 
-The uuid for the analysis will be printed to stdout after the program runs.
+The path to the analysis directory will be printed to stdout after the program runs.
 
-Bugs are classified according to the current config.
+Bugs are classified according to the current config in the main directory.
 
-### Bug Graph Analysis, `[-b]`
+### Bug Graph Analysis, `[--bug-count]`
 
 Enabling this option will enable outputting a file called bug_graph.png into the analysis folder.
 
 The bug_graph.png file has two graphs which compare all the queued tests. It has a figure for bugs over time and a figure for bugs over generations.
 
-### Edge Graphs Analysis, `[-e]`
+### Edge Graphs Analysis, `[--edge-count]`
 
 Enabling this option will enable outputting files called edge_{target}.png into the analysis folder for every target enabled in all of the queued tests.
 
@@ -64,16 +66,24 @@ Each edge_{target}.png has two graphs in it which compare all the queued tests.
 
 It has a figure for edges covered over time for that target and a figure for edges covered over generation for that target.
 
-### Overlap Analysis, `[-v]`
+### Overlap Analysis, `[--bug-overlap]`
 
-Enabling this option will enable outputting a file called overlap_summary.txt and a file called overlap_machine.csv into the analysis folder.
+Enabling this option will enable outputting a file called overlap_machine.csv into the analysis folder.
 
-The overlap_summary.txt file groups every found bug by the largest set of queued tests that commonly found it.
+The overlap_machine.csv file tracks the number of bugs commonly found by every possible combination of queued tests.
 
-In descending order, by way of number of queued tests that commonly found them, it has human readable representations of all the groups.
+Each combo is represented by a row. It is organized in descending order from most inclusive combo to least inclusive combo.
 
-The overlap_machine.csv file tracks the number of bugs commonly found by every possible combination of queued tests. Single bugs can be counted in multiple groups.
+The file has two columns.
 
-Each row represents one such group. Every row will start with a series of True, False values. True indicates that the bugs in the group were commonly found in the corresponding queued test for that column.
+The first column has a list of the runs which are included in the combo. The list is delimited by `\` characters.
 
-The final column of the data contains the number of bugs that fit into each group.
+The second column has an integer which is the number of bugs common to every run in the combo of that row.
+
+This option will also print overlaps to stdout. The stdout is also organized in descending order from most inclusive combo to least inclusive combo.
+
+Each section represents a combo and is headed by the list of runs included in the combo.
+
+Every section will list the total number of bugs common between the runs in the combo.
+
+In each section, the stdout will then list all of those bugs in base64 encoded form. Each line in the section will have 1 bug.

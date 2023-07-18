@@ -174,6 +174,7 @@ def build_overlap_report(
 
     # Write to the machine readable file
     with open(machine_file_path, "wb") as machine_file:
+        machine_file.write("Included runs,Common bug count\n".encode("latin-1"))
         machine_file.write(
             "\n".join(
                 f"{combo_name},{len(common_traces)}" for (combo_name, common_traces) in combo_info
@@ -197,9 +198,7 @@ def build_overlap_report(
         # Sort examples and print them
         common_base64_examples.sort()
         for example_base64 in common_base64_examples:
-            print("***", end="", file=sys.stderr)
-            print(example_base64, end="", file=sys.stderr)
-            print("***", file=sys.stderr)
+            print(example_base64, file=sys.stderr)
 
 
 def build_edge_graphs(
@@ -208,7 +207,7 @@ def build_edge_graphs(
     analysis_dir: PosixPath,
     edge_data: dict[str, dict[str, list[EdgeDatapoint]]],
 ) -> None:
-    # Build The Graphs
+    # Build the graphs
     for target_name, runs in edge_data.items():
         figure, axis = plt.subplots(2, 1, constrained_layout=True)
         figure.suptitle(f"{analysis_name} - {target_name}", fontsize=16)
@@ -233,7 +232,6 @@ def build_edge_graphs(
 
 # Plot a run onto a given axis
 def plot_bugs(run_name: str, differentials: list[BugDatapoint], axis: np.ndarray) -> None:
-    # Plot Things
     axis[0].plot(
         np.array([differential.time for differential in differentials]),
         np.array([differential.bug_count for differential in differentials]),
@@ -357,7 +355,7 @@ def main() -> None:
     parser.add_argument("--edge-count", help="Enable creation of edge count plot", action="store_true")
     args: argparse.Namespace = parser.parse_args()
 
-    # ensure at least one option is enabled
+    # Ensure at least one option is enabled
     if not any((args.bug_count, args.edge_count, args.bug_overlap)):
         raise ValueError("At least one of --bug-count, --bug-overlap, --edge-count must be passed.")
 
