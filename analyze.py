@@ -151,18 +151,15 @@ def build_overlap_report(
     for run_uuid in uuids_to_names:
         byte_differentials: list[bytes] = read_byte_differentials(RESULTS_DIR.joinpath(run_uuid))
         run_differentials[run_uuid] = trace_byte_differentials(byte_differentials)
-    # Setup analysis machine file
     uuid_list: list[str] = list(uuids_to_names)
-    with open(machine_file_path, "wb") as machine_file:
-        machine_file.write(
-            f"{','.join(uuids_to_names[run_uuid] for run_uuid in uuid_list)},count\n".encode("latin-1")
-        )
+
     # Get list of combos from big to small
     combos_list: list[list[str]] = list(
         list(run_uuid for run_uuid, enabled in zip(uuid_list, enables) if enabled)
         for enables in list(itertools.product([True, False], repeat=len(uuid_list)))
     )
     combos_list.sort(key=len, reverse=True)
+    combo_info: list[tuple[str, set[fingerprint_t]]] = []
     for combo in combos_list:
         # Save combo name before editing combo
         combo_name: str = "/".join(uuids_to_names[run_uuid] for run_uuid in combo)
@@ -170,24 +167,36 @@ def build_overlap_report(
         if not combo:
             break
         first_run: dict[fingerprint_t, bytes] = run_differentials[combo.pop()]
-        common: set[fingerprint_t] = set(first_run.keys())
+        common_traces: set[fingerprint_t] = set(first_run.keys())
         for run_uuid in combo:
-            common = common.intersection(run_differentials[run_uuid].keys())
-        # Write to the machine readable file
-        with open(machine_file_path, "ab") as machine_file:
-            machine_file.write(f"{combo_name},{len(common)}\n".encode("latin-1"))
-        # Write to the summary file in a readable byte format
+            common_traces = common_traces.intersection(run_differentials[run_uuid].keys())
+        combo_info.append((combo_name, common_traces))
+
+    # Write to the machine readable file
+    with open(machine_file_path, "wb") as machine_file:
+        machine_file.write(
+            "\n".join(
+                f"{combo_name},{len(common_traces)}" for (combo_name, common_traces) in combo_info
+            ).encode("latin-1")
+        )
+
+    # Choose examples for every trace and base64 them
+    trace_examples: dict[fingerprint_t, str] = {}
+    for traces_to_bytes in run_differentials.values():
+        for trace in traces_to_bytes:
+            trace_examples[trace] = str(base64.b64encode(traces_to_bytes[trace]), "latin-1")
+
+    # Write to the stderr file in a readable format
+    for combo_name, common_traces in combo_info:
         print("-------------------------------------------", file=sys.stderr)
         print(combo_name, file=sys.stderr)
-        print("Total: " + str(len(common)), file=sys.stderr)
+        print("Total: " + str(len(common_traces)), file=sys.stderr)
         print("-------------------------------------------", file=sys.stderr)
         # Find an example in base64 for each trace common between the runs
-        example_base64_bytes: list[str] = list(
-            str(base64.b64encode(first_run[trace]), "latin-1") for trace in common
-        )
+        common_base64_examples: list[str] = list(trace_examples[trace] for trace in common_traces)
         # Sort examples and print them
-        example_base64_bytes.sort()
-        for example_base64 in example_base64_bytes:
+        common_base64_examples.sort()
+        for example_base64 in common_base64_examples:
             print("***", end="", file=sys.stderr)
             print(example_base64, end="", file=sys.stderr)
             print("***", file=sys.stderr)
