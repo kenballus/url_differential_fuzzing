@@ -8,6 +8,7 @@
 
 import sys
 import subprocess
+import dataclasses
 import multiprocessing
 import random
 import itertools
@@ -20,7 +21,6 @@ import base64
 import time
 from pathlib import PosixPath
 from typing import Callable
-from dataclasses import dataclass
 
 
 from tqdm import tqdm  # type: ignore
@@ -317,15 +317,15 @@ def split_input_queue(l: list[bytes], num_chunks: int) -> list[list[bytes]]:
 # Data class for holding information about how many cumulative unique edges of each parser were found in each generation and at what time.
 # Stored in JSON in the coverage list which has a list for each parser, these lists consist of JSON objects for each generation which record generation, time, and
 # number of unique edges uncovered in that parser up to that generation.
-@dataclass
-class EdgeDatapoint:
+@dataclasses.dataclass
+class EdgeCountSnapshot:
     edge_count: int
     time: float
     generation: int
 
 
-@dataclass
-class DifferentialWithInfo:
+@dataclasses.dataclass
+class Differential:
     differential: bytes
     time_found: float
     generation_found: int
@@ -333,10 +333,10 @@ class DifferentialWithInfo:
 
 def fuzz(
     work_dir: PosixPath,
-) -> tuple[list[DifferentialWithInfo], dict[str, list[EdgeDatapoint]]]:
+) -> tuple[list[Differential], dict[str, list[EdgeCountSnapshot]]]:
     start_time: float = time.time()
-    differentials_with_info: list[DifferentialWithInfo] = []
-    coverage_info: dict[str, list[EdgeDatapoint]] = {tc.name: [] for tc in TARGET_CONFIGS}
+    differentials_with_info: list[Differential] = []
+    coverage_info: dict[str, list[EdgeCountSnapshot]] = {tc.name: [] for tc in TARGET_CONFIGS}
     num_cpus = os.cpu_count()
     assert num_cpus is not None
 
@@ -421,7 +421,7 @@ def fuzz(
 
             for tc in TARGET_CONFIGS:
                 coverage_info[tc.name].append(
-                    EdgeDatapoint(len(seen_edges[tc.name]), time.time() - start_time, generation)
+                    EdgeCountSnapshot(len(seen_edges[tc.name]), time.time() - start_time, generation)
                 )
 
             # Minimize differentials
@@ -447,7 +447,7 @@ def fuzz(
                 ):
                     if new_minimized_fingerprint not in minimized_fingerprints:
                         differentials_with_info.append(
-                            DifferentialWithInfo(minimized_input, time.time() - start_time, generation)
+                            Differential(minimized_input, time.time() - start_time, generation)
                         )
                         minimized_fingerprints.add(new_minimized_fingerprint)
 

@@ -5,14 +5,14 @@ import itertools
 import uuid
 import argparse
 import subprocess
+import dataclasses
 import sys
 from pathlib import PosixPath
-from dataclasses import dataclass
 
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 
-from diff_fuzz import trace_batch, fingerprint_t, json_t, EdgeDatapoint
+from diff_fuzz import trace_batch, fingerprint_t, json_t, EdgeCountSnapshot
 
 BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
 RESULTS_DIR: PosixPath = PosixPath("results")
@@ -35,12 +35,9 @@ def check_fuzz_output(run_name: str, run_uuid: str) -> None:
         raise FileNotFoundError(f"{run_name} doesn't have a differentials folder!")
 
 
-# Data class for holding information about how many cumulative unique bugs were found by the run at times when new bugs were found. Records the
-# cumulative number of bugs found up to that point, the time at which the latest included bug was found, and the generation at which the latest included bug was found.
-# Stored in JSON in the differentials list which has a JSON object for every bug found during the run sorted by time found in ascending order. Each JSON object has an
-# example of the bug base64 encoded, the path to a file where an example of the bug is stored, the time at which the bug was found, and the generation when the bug was found.
-@dataclass
-class BugDatapoint:
+# Data class that describes how many bugs have been found at a particular time and generation. Records the cumulative number of bugs found up to that point, the time at which the latest included bug was found, and the generation at which the latest included bug was found. Stored in JSON in the differentials list which has a JSON object for every bug found during the run sorted by time found in ascending order. Each JSON object has an example of the bug base64 encoded, the path to a file where an example of the bug is stored, the time at which the bug was found, and the generation in which the bug was found.
+@dataclasses.dataclass
+class BugCount:
     bug_count: int
     time: float
     generation: int
@@ -48,9 +45,9 @@ class BugDatapoint:
 
 def parse_reports(
     uuids_to_names: dict[str, str]
-) -> tuple[dict[str, list[BugDatapoint]], dict[str, dict[str, list[EdgeDatapoint]]]]:
-    all_bug_data: dict[str, list[BugDatapoint]] = {}
-    all_edge_data: dict[str, dict[str, list[EdgeDatapoint]]] = {}
+) -> tuple[dict[str, list[BugCount]], dict[str, dict[str, list[EdgeCountSnapshot]]]]:
+    all_bug_data: dict[str, list[BugCount]] = {}
+    all_edge_data: dict[str, dict[str, list[EdgeCountSnapshot]]] = {}
     for run_uuid in uuids_to_names:
         with open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "rb") as report_file:
             report_json: json_t = json.load(report_file)
@@ -59,14 +56,14 @@ def parse_reports(
         # Parse the JSON for bug datas
         differentials_json: json_t = report_json["differentials"]
         assert isinstance(differentials_json, list)
-        differentials: list[BugDatapoint] = []
+        differentials: list[BugCount] = []
         running_count: int = 0
         for differential_json in differentials_json:
             assert isinstance(differential_json, dict)
             running_count += 1
             assert isinstance(differential_json["time"], float)
             assert isinstance(differential_json["generation"], int)
-            bug_data: BugDatapoint = BugDatapoint(
+            bug_data: BugCount = BugCount(
                 running_count, differential_json["time"], differential_json["generation"]
             )
             differentials.append(bug_data)
@@ -86,7 +83,7 @@ def parse_reports(
                 assert isinstance(data_point_json["edges"], int)
                 assert isinstance(data_point_json["time"], float)
                 assert isinstance(data_point_json["generation"], int)
-                edge_data: EdgeDatapoint = EdgeDatapoint(
+                edge_data: EdgeCountSnapshot = EdgeCountSnapshot(
                     data_point_json["edges"], data_point_json["time"], data_point_json["generation"]
                 )
                 all_edge_data[target_name][run_uuid].append(edge_data)
@@ -183,7 +180,7 @@ def build_edge_graphs(
     analysis_name: str,
     uuids_to_names: dict[str, str],
     analysis_dir: PosixPath,
-    edge_data: dict[str, dict[str, list[EdgeDatapoint]]],
+    edge_data: dict[str, dict[str, list[EdgeCountSnapshot]]],
 ) -> None:
     # Build the graphs
     for target_name, runs in edge_data.items():
@@ -209,7 +206,7 @@ def build_edge_graphs(
 
 
 # Plot a run onto a given axis
-def plot_bugs(run_name: str, differentials: list[BugDatapoint], axis: np.ndarray) -> None:
+def plot_bugs(run_name: str, differentials: list[BugCount], axis: np.ndarray) -> None:
     axis[0].plot(
         np.array([differential.time for differential in differentials]),
         np.array([differential.bug_count for differential in differentials]),
@@ -229,7 +226,7 @@ def build_bug_graph(
     analysis_name: str,
     uuids_to_names: dict[str, str],
     analysis_dir: PosixPath,
-    bug_data: dict[str, list[BugDatapoint]],
+    bug_data: dict[str, list[BugCount]],
 ) -> None:
     figure, axis = plt.subplots(2, 1, constrained_layout=True)
     figure.suptitle(analysis_name, fontsize=16)
@@ -244,7 +241,7 @@ def build_bug_graph(
 
 # Dataclass for holding information about runs in the queue. Contains a user-defined name, a commit hash,
 # a timeout in seconds, and potentially a config for the run
-@dataclass
+@dataclasses.dataclass
 class QueuedRun:
     name: str
     commit: str
