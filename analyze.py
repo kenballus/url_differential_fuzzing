@@ -262,7 +262,7 @@ def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
             commit_hash: str = split_line[1]
             timeout: int = int(split_line[2])
             config_file: PosixPath = PosixPath(split_line[3])
-            assert config_file.is_file()
+            assert CONFIGS_DIR.joinpath(config_file).is_file()
             queued_runs.append(QueuedRun(name, commit_hash, timeout, config_file))
     return queued_runs
 
