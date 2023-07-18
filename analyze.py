@@ -108,14 +108,13 @@ def parse_reports(
     return all_bug_data, all_edge_data
 
 
-# Reads byte differentials from the given differentials list and gives them back in a list
+# Reads byte differentials from the given differentials directory and gives them back in a list
 def read_byte_differentials(
     differentials_folder: PosixPath,
 ) -> list[bytes]:
     # Read the bugs from files
     byte_differentials: list[bytes] = []
     differentials = os.listdir(differentials_folder)
-    differentials.sort(key=int)
     for diff in differentials:
         differential_file_name = differentials_folder.joinpath(diff)
         with open(differential_file_name, "rb") as differential_file:
