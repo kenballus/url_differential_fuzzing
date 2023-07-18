@@ -137,7 +137,7 @@ def build_overlap_report(
     # Get list of combos from big to small
     combos_list: list[list[str]] = list(
         list(combo)
-        for i in range(1, len(uuids_to_names) + 1)
+        for i in range(len(uuids_to_names), 0, -1)
         for combo in itertools.combinations(uuids_to_names.keys(), i)
     )
     combo_name_to_traces: dict[str, set[fingerprint_t]] = {}
