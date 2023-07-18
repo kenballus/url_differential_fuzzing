@@ -19,7 +19,7 @@ import shutil
 import base64
 import time
 from pathlib import PosixPath
-from typing import Callable, Union
+from typing import Callable
 
 
 from tqdm import tqdm  # type: ignore
@@ -60,9 +60,7 @@ assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 
 fingerprint_t = tuple[frozenset[int], ...]
 
-json_t = Union[str, int, float, "json_obj_t", "json_list_t"]
-json_obj_t = dict[str, json_t]
-json_list_t = list[json_t]
+json_t = None | bool | str | int | float | dict[str, "json_t"] | list["json_t"]
 
 
 def byte_replace(b: bytes) -> bytes:
@@ -315,7 +313,7 @@ def split_input_queue(l: list[bytes], num_chunks: int) -> list[list[bytes]]:
     ]
 
 
-def main(
+def fuzz(
     minimized_differentials: list[bytes],
     minimized_differentials_info: list[tuple[float, int]],
     coverage_info: tuple[list[tuple[int, float, int]], ...],
@@ -403,7 +401,7 @@ def main(
                     differentials.append(current_input)
                 else:
                     mutation_candidates.append(current_input)
-                # Record new Edges
+                # Record new edges
                 for tc_edges, new_edges in zip(seen_edges, fingerprint):
                     tc_edges.update(new_edges)
 
@@ -449,61 +447,65 @@ def main(
         generation += 1
 
 
-if __name__ == "__main__":
+def main() -> None:
     if len(sys.argv) > 2:
         print(f"Usage: python3 {sys.argv[0]} run_folder", file=sys.stderr)
         sys.exit(1)
 
-    _run_id: str = sys.argv[1] if len(sys.argv) >= 2 else str(uuid.uuid4())
-    if os.path.exists(RESULTS_DIR.joinpath(_run_id)):
+    run_id: str = sys.argv[1] if len(sys.argv) >= 2 else str(uuid.uuid4())
+    if os.path.exists(RESULTS_DIR.joinpath(run_id)):
         print("Results folder already exists. Overriding.", file=sys.stderr)
-        shutil.rmtree(RESULTS_DIR.joinpath(_run_id))
-    _work_dir: PosixPath = PosixPath("/tmp").joinpath(f"diff_fuzz-{_run_id}")
-    os.mkdir(_work_dir)
+        shutil.rmtree(RESULTS_DIR.joinpath(run_id))
+    work_dir: PosixPath = PosixPath("/tmp").joinpath(f"diff_fuzz-{run_id}")
+    os.mkdir(work_dir)
 
-    _differentials: list[bytes] = []
-    _differentials_info: list[tuple[float, int]] = []
-    _coverage_info: tuple[list[tuple[int, float, int]], ...] = tuple([] for _ in TARGET_CONFIGS)
+    differentials: list[bytes] = []
+    differentials_info: list[tuple[float, int]] = []
+    coverage_info: tuple[list[tuple[int, float, int]], ...] = tuple([] for _ in TARGET_CONFIGS)
     try:
-        main(_differentials, _differentials_info, _coverage_info, _work_dir)
+        fuzz(differentials, differentials_info, coverage_info, work_dir)
     except KeyboardInterrupt:
         pass
 
-    _run_results_dir = RESULTS_DIR.joinpath(_run_id)
-    os.mkdir(_run_results_dir)
-    for _final_differential in _differentials:
-        _result_file_path = _run_results_dir.joinpath(str(hash(_final_differential)))
-        with open(_result_file_path, "wb") as _result_file:
-            _result_file.write(_final_differential)
+    run_results_dir = RESULTS_DIR.joinpath(run_id)
+    os.mkdir(run_results_dir)
+    for final_differential in differentials:
+        result_file_path = run_results_dir.joinpath(str(hash(final_differential)))
+        with open(result_file_path, "wb") as result_file:
+            result_file.write(final_differential)
             print(
-                f"Differential: {str(_final_differential)[2:-1]:20} Path: {str(_result_file_path)}",
+                f"Differential: {str(final_differential)[2:-1]:20} Path: {str(result_file_path)}",
                 file=sys.stderr,
             )
 
-    _coverage_output: json_obj_t = {
-        _tc.name: [
-            {"edges": _edges, "time": _time, "generation": _generation}
-            for (_edges, _time, _generation) in _coverage_info[_i]
+    coverage_output: json_t = {
+        tc.name: [
+            {"edges": edges, "time": time, "generation": generation}
+            for (edges, time, generation) in coverage_info[i]
         ]
-        for _i, _tc in enumerate(TARGET_CONFIGS)
+        for i, tc in enumerate(TARGET_CONFIGS)
     }
-    _differentials_output: json_list_t = [
+    differentials_output: json_t = [
         {
-            "differential": str(base64.b64encode(_differential), "ascii"),
-            "path": str(_run_results_dir.joinpath(str(hash(_differential))).resolve()),
-            "time": _time,
-            "generation": _generation,
+            "differential": str(base64.b64encode(differential), "ascii"),
+            "path": str(run_results_dir.joinpath(str(hash(differential))).resolve()),
+            "time": time,
+            "generation": generation,
         }
-        for _differential, (_time, _generation) in zip(_differentials, _differentials_info)
+        for differential, (time, generation) in zip(differentials, differentials_info)
     ]
-    _output: json_obj_t = {
-        "uuid": _run_id,
-        "coverage": _coverage_output,
-        "differentials": _differentials_output,
+    output: json_t = {
+        "uuid": run_id,
+        "coverage": coverage_output,
+        "differentials": differentials_output,
     }
-    with open(REPORTS_DIR.joinpath(_run_id).with_suffix(".json"), "w", encoding="latin-1") as report_file:
-        report_file.write(json.dumps(_output, indent=4))
+    with open(REPORTS_DIR.joinpath(run_id).with_suffix(".json"), "w", encoding="latin-1") as report_file:
+        report_file.write(json.dumps(output, indent=4))
 
-    print(_run_id)
+    print(run_id)
 
-    shutil.rmtree(_work_dir)
+    shutil.rmtree(work_dir)
+
+
+if __name__ == "__main__":
+    main()

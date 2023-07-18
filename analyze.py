@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 
-from diff_fuzz import trace_batch, fingerprint_t, json_t, json_obj_t
+from diff_fuzz import trace_batch, fingerprint_t, json_t
 
 BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
 RESULTS_DIR: PosixPath = PosixPath("results")
@@ -63,7 +63,7 @@ def parse_reports(
     all_edge_data: dict[str, dict[str, list[EdgeDatapoint]]] = {}
     for run_uuid in uuids_to_names:
         with open(REPORTS_DIR.joinpath(run_uuid).with_suffix(".json"), "rb") as report_file:
-            report_json: json_obj_t = json.load(report_file)
+            report_json: json_t = json.load(report_file)
             assert isinstance(report_json, dict)
 
         # Parse the JSON for bug datas
@@ -143,21 +143,18 @@ def build_overlap_report(
     for run_uuid in uuids_to_names:
         byte_differentials: list[bytes] = read_byte_differentials(RESULTS_DIR.joinpath(run_uuid))
         run_differentials[run_uuid] = trace_byte_differentials(byte_differentials)
-    uuid_list: list[str] = list(uuids_to_names)
 
     # Get list of combos from big to small
     combos_list: list[list[str]] = list(
-        list(run_uuid for run_uuid, enabled in zip(uuid_list, enables) if enabled)
-        for enables in list(itertools.product([True, False], repeat=len(uuid_list)))
+        list(combo)
+        for i in range(1, len(uuids_to_names) + 1)
+        for combo in itertools.combinations(uuids_to_names.keys(), i)
     )
-    combos_list.sort(key=len, reverse=True)
     combo_name_to_traces: dict[str, set[fingerprint_t]] = {}
     for combo in combos_list:
         # Save combo name before editing combo
         combo_name: str = "/".join(uuids_to_names[run_uuid] for run_uuid in combo)
         # For each combo build list of common bugs
-        if not combo:
-            break
         common_traces: set[fingerprint_t] = set(run_differentials[combo.pop()].keys())
         for run_uuid in combo:
             common_traces = common_traces.intersection(run_differentials[run_uuid].keys())
@@ -188,8 +185,7 @@ def build_overlap_report(
         # Find an example for each trace common between the runs
         common_examples: list[str] = list(str(trace_examples[trace])[2:-1] for trace in common_traces)
         # Sort examples and print them
-        common_examples.sort()
-        for example in common_examples:
+        for example in sorted(common_examples):
             print(example, file=sys.stderr)
 
 
@@ -263,29 +259,21 @@ class QueuedRun:
     name: str
     commit: str
     timeout: int
-    config: str | None
+    config_file: PosixPath
 
 
-def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
+def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:  # TODO: Add back optional
     queued_runs: list[QueuedRun] = []
     # Read queue file and check validity
     with open(queue_file_path, "r", encoding="ascii") as queue_file:
-        for line in queue_file.readlines():
-            split_line: list[str] = line.strip().split(",")
-            if len(split_line) < 3:
-                raise ValueError(f"Queue line {line.strip()} has too few arguments.")
-            if len(split_line) > 4:
-                raise ValueError(f"Queue line {line.strip()} has too many arguments.")
-            config: str | None = None
-            if len(split_line) == 4:
-                config = split_line[3]
-                if not CONFIGS_DIR.joinpath(config).is_file():
-                    raise ValueError(f"{config} is not a valid config in the configs directory.")
-            try:
-                timeout: int = int(split_line[2])
-            except ValueError as e:
-                raise ValueError(f"Timeout {split_line[2]} must be an integer") from e
-            queued_runs.append(QueuedRun(split_line[0], split_line[1], timeout, config))
+        for split_line in map(lambda line: line.strip().split(","), queue_file.readlines()):
+            assert len(split_line) == 4
+            name: str = split_line[0]
+            commit_hash: str = split_line[1]
+            timeout: int = int(split_line[2])
+            config_file: PosixPath = PosixPath(split_line[3])
+            assert config_file.is_file()
+            queued_runs.append(QueuedRun(name, commit_hash, timeout, config_file))
     return queued_runs
 
 
@@ -304,27 +292,23 @@ def execute_runs(queued_runs: list[QueuedRun]) -> dict[str, str]:
     # Execute queued runs
     for queued_run in queued_runs:
         subprocess.run(["git", "checkout", queued_run.commit], check=True)
-        if queued_run.config is None:
-            shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
-        else:
-            shutil.copyfile(CONFIGS_DIR.joinpath(queued_run.config), CONFIG_FILE_PATH)
+        shutil.copyfile(CONFIGS_DIR.joinpath(queued_run.config_file), CONFIG_FILE_PATH)
         uuids_to_names[
-            str(
-                subprocess.run(
-                    [
-                        "timeout",
-                        "--foreground",
-                        "--signal=2",
-                        "--preserve-status",
-                        str(queued_run.timeout),
-                        "python",
-                        "diff_fuzz.py",
-                    ],
-                    capture_output=True,
-                    check=True,
-                ).stdout,
-                encoding="ascii",
-            ).strip()
+            subprocess.run(
+                [
+                    "timeout",
+                    "--foreground",
+                    "--signal=2",  # SIGINT
+                    "--preserve-status",
+                    str(queued_run.timeout),
+                    "python",
+                    "diff_fuzz.py",
+                ],
+                capture_output=True,
+                check=True,
+            )
+            .stdout.decode("ascii")
+            .strip()
         ] = queued_run.name
 
     # Cleanup

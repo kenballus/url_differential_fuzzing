@@ -18,7 +18,7 @@ SEED_DIR: PosixPath = PosixPath("./seeds")
 # The directory where the findings go when the fuzzer run finishes.
 RESULTS_DIR: PosixPath = PosixPath("./results")
 
-# The directory where JSONs containing run information go
+# The directory where run information will go
 REPORTS_DIR: PosixPath = PosixPath("./reports")
 
 # Time in milliseconds given to each process
