@@ -263,6 +263,8 @@ def build_bug_graph(
     plt.close()
 
 
+# Dataclass for holding information about runs in the queue. Contains a user-defined name, a commit hash,
+# a timeout in seconds, and potentially a config for the run
 @dataclass
 class QueuedRun:
     name: str
@@ -271,16 +273,7 @@ class QueuedRun:
     config: str | None
 
 
-def execute_runs(queue_file_path: PosixPath) -> dict[str, str]:
-    # Copy the config
-    assert os.path.isfile(CONFIG_FILE_PATH)
-    shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
-
-    # Save original branch
-    original_branch: bytes = subprocess.run(
-        ["git", "branch", "--show-current"], capture_output=True, check=True
-    ).stdout.strip()
-
+def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
     queued_runs: list[QueuedRun] = []
     # Read queue file and check validity
     with open(queue_file_path, "r", encoding="ascii") as queue_file:
@@ -300,6 +293,18 @@ def execute_runs(queue_file_path: PosixPath) -> dict[str, str]:
             except ValueError as e:
                 raise ValueError(f"Timeout {split_line[2]} must be an integer") from e
             queued_runs.append(QueuedRun(split_line[0], split_line[1], timeout, config))
+    return queued_runs
+
+
+def execute_runs(queued_runs: list[QueuedRun]) -> dict[str, str]:
+    # Copy the config
+    assert os.path.isfile(CONFIG_FILE_PATH)
+    shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
+
+    # Save original branch
+    original_branch: bytes = subprocess.run(
+        ["git", "branch", "--show-current"], capture_output=True, check=True
+    ).stdout.strip()
 
     uuids_to_names: dict[str, str] = {}
 
@@ -358,12 +363,13 @@ def main() -> None:
     if not any((args.bug_count, args.edge_count, args.bug_overlap)):
         raise ValueError("At least one of --bug-count, --bug-overlap, --edge-count must be passed.")
 
-    # Check that queue file exists
+    # Check that queue file exists and get queued runs
     queue_file_path = PosixPath(args.queue_file_path)
     assert os.path.isfile(queue_file_path)
+    queued_runs: list[QueuedRun] = retrieve_queued_runs(queue_file_path)
 
     # Run!
-    uuids_to_names: dict[str, str] = execute_runs(queue_file_path)
+    uuids_to_names: dict[str, str] = execute_runs(queued_runs)
 
     # Parse and assert data
     for run_uuid, run_name in uuids_to_names.items():
