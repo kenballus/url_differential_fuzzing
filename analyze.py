@@ -16,6 +16,10 @@ import numpy as np
 
 from diff_fuzz import trace_batch, fingerprint_t
 
+json_t = Union[str, int, float, "json_obj_t", "json_list_t"]
+json_obj_t = dict[str, json_t]
+json_list_t = list[json_t]
+
 BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
 RESULTS_DIR: PosixPath = PosixPath("results")
 REPORTS_DIR: PosixPath = PosixPath("reports")
@@ -56,11 +60,6 @@ class BugDatapoint:
     bug_count: int
     time: float
     generation: int
-
-
-json_t = Union[str, int, float, "json_obj_t", "json_list_t"]
-json_obj_t = dict[str, json_t]
-json_list_t = list[json_t]
 
 
 def parse_reports(

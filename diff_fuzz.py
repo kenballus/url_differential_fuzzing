@@ -60,6 +60,10 @@ assert all(map(lambda tc: tc.executable.exists(), TARGET_CONFIGS))
 
 fingerprint_t = tuple[frozenset[int], ...]
 
+json_t = Union[str, int, float, "json_obj_t", "json_list_t"]
+json_obj_t = dict[str, json_t]
+json_list_t = list[json_t]
+
 
 def grammar_regenerate(b: bytes) -> bytes:
     # Assumes that b matches the grammar_re.
@@ -480,10 +484,6 @@ if __name__ == "__main__":
                 f"Differential: {str(_final_differential)[2:-1]:20} Path: {str(_result_file_path)}",
                 file=sys.stderr,
             )
-
-    json_t = Union[str, int, float, "json_obj_t", "json_list_t"]
-    json_obj_t = dict[str, json_t]
-    json_list_t = list[json_t]
 
     _coverage_output: json_obj_t = {
         _tc.name: [
