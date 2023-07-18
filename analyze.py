@@ -158,8 +158,7 @@ def build_overlap_report(
         # For each combo build list of common bugs
         if not combo:
             break
-        first_run: dict[fingerprint_t, bytes] = run_differentials[combo.pop()]
-        common_traces: set[fingerprint_t] = set(first_run.keys())
+        common_traces: set[fingerprint_t] = set(run_differentials[combo.pop()].keys())
         for run_uuid in combo:
             common_traces = common_traces.intersection(run_differentials[run_uuid].keys())
         combo_name_to_traces[combo_name] = common_traces
