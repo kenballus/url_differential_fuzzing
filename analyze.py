@@ -308,7 +308,7 @@ def execute_runs(queued_runs: list[QueuedRun]) -> dict[str, str]:
             ] = queued_run.name
     finally:
         # Cleanup
-        attempt_cleanup(shutil.copyfile, "Failed to reset config file.", CONFIG_COPY_PATH, CONFIG_FILE_PATH)
+        attempt_cleanup(shutil.copyfile, "Failed to restore config file.", CONFIG_COPY_PATH, CONFIG_FILE_PATH)
         attempt_cleanup(os.remove, f"Failed to remove {CONFIG_COPY_PATH}.", CONFIG_COPY_PATH)
         attempt_cleanup(
             subprocess.run,
