@@ -111,8 +111,10 @@ def trace_byte_differentials(byte_differentials: list[bytes]) -> dict[fingerprin
     if os.path.exists(RUN_DIR):
         raise ValueError(f"Run directory already exists! Please delete {RUN_DIR.resolve()}")
     os.mkdir(RUN_DIR)
-    fingerprints: list[fingerprint_t] = trace_batch(RUN_DIR, byte_differentials)
-    shutil.rmtree(RUN_DIR)
+    try:
+        fingerprints: list[fingerprint_t] = trace_batch(RUN_DIR, byte_differentials)
+    finally:
+        shutil.rmtree(RUN_DIR)
 
     # Record
     fingerprints_to_bytes = {}
@@ -257,7 +259,9 @@ def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
             name: str = split_line[0]
             commit_hash: str = split_line[1]
             timeout: int = int(split_line[2])
-            config_file: PosixPath = PosixPath(split_line[3]).resolve() if len(split_line) == 4 else CONFIG_COPY_PATH
+            config_file: PosixPath = (
+                PosixPath(split_line[3]).resolve() if len(split_line) == 4 else CONFIG_COPY_PATH
+            )
             assert config_file.is_file()
             queued_runs.append(QueuedRun(name, commit_hash, timeout, config_file))
     return queued_runs
