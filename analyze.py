@@ -8,6 +8,7 @@ import subprocess
 import dataclasses
 import sys
 from pathlib import PosixPath
+from typing import Callable
 
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
@@ -22,6 +23,13 @@ RUN_DIR: PosixPath = PosixPath("/tmp").joinpath("diff-fuzz-analyzer")
 
 CONFIG_FILE_PATH: PosixPath = PosixPath("config.py").resolve()
 CONFIG_COPY_PATH: PosixPath = BENCHMARKING_DIR.joinpath("config_copy.py")
+
+
+def attempt_cleanup(f: Callable, error_message: str, *args, **kwargs) -> None:
+    try:
+        f(*args, **kwargs)
+    except Exception:  # pylint: disable=broad-except
+        print(error_message, file=sys.stderr)
 
 
 # Check that the files exported by a given run of the fuzzer actually exist
@@ -114,7 +122,7 @@ def trace_byte_differentials(byte_differentials: list[bytes]) -> dict[fingerprin
     try:
         fingerprints: list[fingerprint_t] = trace_batch(RUN_DIR, byte_differentials)
     finally:
-        shutil.rmtree(RUN_DIR)
+        attempt_cleanup(shutil.rmtree, f"Failed to cleanup the run directory at {RUN_DIR}", RUN_DIR)
 
     # Record
     fingerprints_to_bytes = {}
@@ -263,6 +271,7 @@ def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
                 PosixPath(split_line[3]).resolve() if len(split_line) == 4 else CONFIG_COPY_PATH
             )
             assert config_file.is_file()
+            assert config_file != CONFIG_FILE_PATH
             queued_runs.append(QueuedRun(name, commit_hash, timeout, config_file))
     return queued_runs
 
@@ -299,9 +308,15 @@ def execute_runs(queued_runs: list[QueuedRun]) -> dict[str, str]:
             ] = queued_run.name
     finally:
         # Cleanup
-        shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
-        os.remove(CONFIG_COPY_PATH)
-        subprocess.run(["git", "switch", original_branch], capture_output=True, check=True)
+        attempt_cleanup(shutil.copyfile, "Failed to reset config file.", CONFIG_COPY_PATH, CONFIG_FILE_PATH)
+        attempt_cleanup(os.remove, f"Failed to remove {CONFIG_COPY_PATH}.", CONFIG_COPY_PATH)
+        attempt_cleanup(
+            subprocess.run,
+            "Failed to return to original branch.",
+            ["git", "switch", original_branch],
+            capture_output=True,
+            check=True,
+        )
 
     return uuids_to_names
 
@@ -310,6 +325,7 @@ def main() -> None:
     assert RESULTS_DIR.is_dir()
     assert ANALYSES_DIR.is_dir()
     assert REPORTS_DIR.is_dir()
+    assert CONFIG_COPY_PATH != CONFIG_FILE_PATH
 
     # Retrieve arguments
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
