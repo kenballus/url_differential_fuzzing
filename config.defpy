@@ -18,6 +18,9 @@ SEED_DIR: PosixPath = PosixPath("./seeds")
 # The directory where the findings go when the fuzzer run finishes.
 RESULTS_DIR: PosixPath = PosixPath("./results")
 
+# The directory where run information will go
+REPORTS_DIR: PosixPath = PosixPath("./reports")
+
 # Time in milliseconds given to each process
 TIMEOUT_TIME: int = 10000
 
@@ -41,18 +44,19 @@ ROUGH_DESIRED_QUEUE_LEN: int = 1000
 # The default choice was selected because of UTF-8.
 DELETION_LENGTHS: list[int] = [4, 3, 2, 1]
 
-_ASCII_LETTERS_TO_REPLACE: set[int] = {ord(c) for c in string.ascii_letters} - {ord('a')}
-_ASCII_DIGITS_TO_REPLACE: set[int] = {ord(c) for c in string.digits} - {ord('1')}
+_ASCII_LETTERS_TO_REPLACE: set[int] = {ord(c) for c in string.ascii_letters} - {ord("a")}
+_ASCII_DIGITS_TO_REPLACE: set[int] = {ord(c) for c in string.digits} - {ord("1")}
+
 
 # A function which takes a byte and returns the byte it should be replaced by during minimization
 # Useful for dealing with character jump-tables that cause duplicate results.
 # If the byte doesn't have a replacement candidate, b'' is returned.
 def get_replacement_byte(to_replace: int) -> bytes:
     if to_replace in _ASCII_LETTERS_TO_REPLACE:
-        return b'a'
+        return b"a"
     if to_replace in _ASCII_DIGITS_TO_REPLACE:
-        return b'1'
-    return b''
+        return b"1"
+    return b""
 
 
 # This is the parse tree class for your programs' output.
@@ -83,7 +87,9 @@ def compare_parse_trees(t1: ParseTree | None, t2: ParseTree | None) -> tuple[boo
             t1.userinfo.lower() == t2.userinfo.lower(),
             t1.host.lower() == t2.host.lower(),
             t1.port == t2.port,
-            t1.path == t2.path or (t1.path.startswith(b'/') and t1.path[1:] == t2.path) or (t2.path.startswith(b'/') and t2.path[1:] == t1.path),
+            t1.path == t2.path
+            or (t1.path.startswith(b"/") and t1.path[1:] == t2.path)
+            or (t2.path.startswith(b"/") and t2.path[1:] == t1.path),
             t1.query == t2.query,
             t1.fragment == t2.fragment,
         )
