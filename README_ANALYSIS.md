@@ -14,7 +14,7 @@ Tests can be added to a queue as follows:
 
 Each test will be run on `commit_hash` with config `configfile`.
 
-`configfile` is optional and must correspond to the name of a config file in the benchmarking/bench_configs folder.
+`configfile` is optional and must correspond to the path of a config file which is not the currently enabled config file in the main directory.
 
 If no config file is specified then the test will be run on the current config file in the main directory.
 
@@ -23,9 +23,9 @@ Each test will be forcefully ended after `timeout` seconds have elapsed or will 
 Complete Benchmarking Queue File Example:
 
 ```
-Test A,043f804572d88cfd7be1dc7247bef28d875b0d60,30,rfc_url.py
+Test A,043f804572d88cfd7be1dc7247bef28d875b0d60,30,/home/user1/url_differential_fuzzing/benchmarking/bench_configs/alt_config.py
 Test B,043f804572d88cfd7be1dc7247bef28d875b0d60,30
-Test C,b7aa710177b48a680e97d9851b34bcab366626cf,30,rfc_url.py
+Test C,b7aa710177b48a680e97d9851b34bcab366626cf,30,benchmarking/bench_configs/alt_config.py
 ```
 
 ## How to run

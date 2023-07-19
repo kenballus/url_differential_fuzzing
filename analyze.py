@@ -253,21 +253,17 @@ def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
     # Read queue file and check validity
     with open(queue_file_path, "r", encoding="ascii") as queue_file:
         for split_line in map(lambda line: line.strip().split(","), queue_file.readlines()):
-            assert len(split_line) == 4
+            assert len(split_line) == 4 or len(split_line) == 3
             name: str = split_line[0]
             commit_hash: str = split_line[1]
             timeout: int = int(split_line[2])
-            config_file: PosixPath = PosixPath(split_line[3]).resolve()
+            config_file: PosixPath = PosixPath(split_line[3]) if len(split_line) == 4 else CONFIG_COPY_PATH
             assert config_file.is_file()
             queued_runs.append(QueuedRun(name, commit_hash, timeout, config_file))
     return queued_runs
 
 
 def execute_runs(queued_runs: list[QueuedRun]) -> dict[str, str]:
-    # Copy the config
-    assert os.path.isfile(CONFIG_FILE_PATH)
-    shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
-
     # Save original branch
     original_branch: bytes = subprocess.run(
         ["git", "branch", "--show-current"], capture_output=True, check=True
@@ -324,6 +320,10 @@ def main() -> None:
     # Ensure at least one option is enabled
     if not any((args.bug_count, args.edge_count, args.bug_overlap)):
         raise ValueError("At least one of --bug-count, --bug-overlap, --edge-count must be passed.")
+
+    # Copy the original config
+    assert os.path.isfile(CONFIG_FILE_PATH)
+    shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
 
     # Check that queue file exists and get queued runs
     queue_file_path = PosixPath(args.queue_file_path)
