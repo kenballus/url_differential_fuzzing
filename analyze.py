@@ -21,7 +21,6 @@ ANALYSES_DIR: PosixPath = BENCHMARKING_DIR.joinpath("analyses")
 
 CONFIG_FILE_PATH: PosixPath = PosixPath("config.py")
 CONFIG_COPY_PATH: PosixPath = BENCHMARKING_DIR.joinpath("config_copy.py")
-CONFIGS_DIR: PosixPath = BENCHMARKING_DIR.joinpath("bench_configs")
 
 
 # Check that the files exported by a given run of the fuzzer actually exist
@@ -258,8 +257,8 @@ def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
             name: str = split_line[0]
             commit_hash: str = split_line[1]
             timeout: int = int(split_line[2])
-            config_file: PosixPath = PosixPath(split_line[3])
-            assert CONFIGS_DIR.joinpath(config_file).is_file()
+            config_file: PosixPath = PosixPath(split_line[3]).resolve()
+            assert config_file.is_file()
             queued_runs.append(QueuedRun(name, commit_hash, timeout, config_file))
     return queued_runs
 
@@ -279,7 +278,7 @@ def execute_runs(queued_runs: list[QueuedRun]) -> dict[str, str]:
     # Execute queued runs
     for queued_run in queued_runs:
         subprocess.run(["git", "checkout", queued_run.commit], check=True)
-        shutil.copyfile(CONFIGS_DIR.joinpath(queued_run.config_file), CONFIG_FILE_PATH)
+        shutil.copyfile(queued_run.config_file, CONFIG_FILE_PATH)
         uuids_to_names[
             subprocess.run(
                 [
@@ -310,7 +309,6 @@ def main() -> None:
     assert RESULTS_DIR.is_dir()
     assert ANALYSES_DIR.is_dir()
     assert REPORTS_DIR.is_dir()
-    assert CONFIGS_DIR.is_dir()
 
     # Retrieve arguments
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
