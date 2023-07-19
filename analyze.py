@@ -8,7 +8,7 @@ import subprocess
 import dataclasses
 import sys
 from pathlib import PosixPath
-from typing import Callable
+from typing import Callable, TypeVar
 
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
@@ -25,11 +25,13 @@ CONFIG_FILE_PATH: PosixPath = PosixPath("config.py").resolve()
 CONFIG_COPY_PATH: PosixPath = BENCHMARKING_DIR.joinpath("config_copy.py")
 
 
-def attempt_cleanup(f: Callable, error_message: str, *args, **kwargs) -> None:
+T = TypeVar("T")
+def attempt(f: Callable[..., T], error_message: str, *args, **kwargs) -> T | None:
     try:
-        f(*args, **kwargs)
-    except Exception:  # pylint: disable=broad-except
+        return f(*args, **kwargs)
+    except:  # pylint: disable=broad-except
         print(error_message, file=sys.stderr)
+        return None
 
 
 # Check that the files exported by a given run of the fuzzer actually exist
@@ -122,7 +124,7 @@ def trace_byte_differentials(byte_differentials: list[bytes]) -> dict[fingerprin
     try:
         fingerprints: list[fingerprint_t] = trace_batch(RUN_DIR, byte_differentials)
     finally:
-        attempt_cleanup(shutil.rmtree, f"Failed to cleanup the run directory at {RUN_DIR}", RUN_DIR)
+        attempt(shutil.rmtree, f"Failed to cleanup the run directory at {RUN_DIR}", RUN_DIR)
 
     # Record
     fingerprints_to_bytes = {}
@@ -308,9 +310,9 @@ def execute_runs(queued_runs: list[QueuedRun]) -> dict[str, str]:
             ] = queued_run.name
     finally:
         # Cleanup
-        attempt_cleanup(shutil.copyfile, "Failed to restore config file.", CONFIG_COPY_PATH, CONFIG_FILE_PATH)
-        attempt_cleanup(os.remove, f"Failed to remove {CONFIG_COPY_PATH}.", CONFIG_COPY_PATH)
-        attempt_cleanup(
+        attempt(shutil.copyfile, "Failed to restore config file.", CONFIG_COPY_PATH, CONFIG_FILE_PATH)
+        attempt(os.remove, f"Failed to remove {CONFIG_COPY_PATH}.", CONFIG_COPY_PATH)
+        attempt(
             subprocess.run,
             "Failed to return to original branch.",
             ["git", "switch", original_branch],
