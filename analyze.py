@@ -272,31 +272,32 @@ def execute_runs(queued_runs: list[QueuedRun]) -> dict[str, str]:
     uuids_to_names: dict[str, str] = {}
 
     # Execute queued runs
-    for queued_run in queued_runs:
-        subprocess.run(["git", "checkout", queued_run.commit], check=True)
-        shutil.copyfile(queued_run.config_file, CONFIG_FILE_PATH)
-        uuids_to_names[
-            subprocess.run(
-                [
-                    "timeout",
-                    "--foreground",
-                    "--signal=2",  # SIGINT
-                    "--preserve-status",
-                    str(queued_run.timeout),
-                    "python",
-                    "diff_fuzz.py",
-                ],
-                capture_output=True,
-                check=True,
-            )
-            .stdout.decode("ascii")
-            .strip()
-        ] = queued_run.name
-
-    # Cleanup
-    subprocess.run(["git", "switch", original_branch], capture_output=True, check=True)
-    shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
-    os.remove(CONFIG_COPY_PATH)
+    try:
+        for queued_run in queued_runs:
+            subprocess.run(["git", "checkout", queued_run.commit], check=True)
+            shutil.copyfile(queued_run.config_file, CONFIG_FILE_PATH)
+            uuids_to_names[
+                subprocess.run(
+                    [
+                        "timeout",
+                        "--foreground",
+                        "--signal=2",  # SIGINT
+                        "--preserve-status",
+                        str(queued_run.timeout),
+                        "python",
+                        "diff_fuzz.py",
+                    ],
+                    capture_output=True,
+                    check=True,
+                )
+                .stdout.decode("ascii")
+                .strip()
+            ] = queued_run.name
+    finally:
+        # Cleanup
+        shutil.copyfile(CONFIG_COPY_PATH, CONFIG_FILE_PATH)
+        os.remove(CONFIG_COPY_PATH)
+        subprocess.run(["git", "switch", original_branch], capture_output=True, check=True)
 
     return uuids_to_names
 
