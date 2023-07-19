@@ -508,7 +508,7 @@ def main() -> None:
     }
     differentials_output: json_t = [
         {
-            "differential": str(base64.b64encode(diff_with_info.differential), "ascii"),
+            "differential": base64.b64encode(diff_with_info.differential).decode("ascii"),
             "path": str(run_results_dir.joinpath(str(hash(diff_with_info.differential))).resolve()),
             "time": diff_with_info.time_found,
             "generation": diff_with_info.generation_found,
@@ -521,7 +521,7 @@ def main() -> None:
         "differentials": differentials_output,
     }
     with open(REPORTS_DIR.joinpath(run_id).with_suffix(".json"), "w", encoding="latin-1") as report_file:
-        report_file.write(json.dumps(output, indent=4))
+        report_file.write(json.dumps(output))
 
     print(run_id)
 

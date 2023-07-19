@@ -14,12 +14,13 @@ import numpy as np
 
 from diff_fuzz import trace_batch, fingerprint_t, json_t, EdgeCountSnapshot
 
-BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking")
-RESULTS_DIR: PosixPath = PosixPath("results")
-REPORTS_DIR: PosixPath = PosixPath("reports")
-ANALYSES_DIR: PosixPath = BENCHMARKING_DIR.joinpath("analyses")
+BENCHMARKING_DIR: PosixPath = PosixPath("benchmarking").resolve()
+RESULTS_DIR: PosixPath = PosixPath("results").resolve()
+REPORTS_DIR: PosixPath = PosixPath("reports").resolve()
+ANALYSES_DIR: PosixPath = BENCHMARKING_DIR.joinpath("analyses").resolve()
+RUN_DIR: PosixPath = PosixPath("/tmp").joinpath("diff-fuzz-analyzer")
 
-CONFIG_FILE_PATH: PosixPath = PosixPath("config.py")
+CONFIG_FILE_PATH: PosixPath = PosixPath("config.py").resolve()
 CONFIG_COPY_PATH: PosixPath = BENCHMARKING_DIR.joinpath("config_copy.py")
 
 
@@ -107,12 +108,11 @@ def read_byte_differentials(
 # The dictionary maps each found fingerprint to a byte differential example.
 def trace_byte_differentials(byte_differentials: list[bytes]) -> dict[fingerprint_t, bytes]:
     # Trace the bugs
-    run_dir: PosixPath = PosixPath("/tmp").joinpath("analyzer")
-    if os.path.exists(run_dir):
-        shutil.rmtree(run_dir)
-    os.mkdir(run_dir)
-    fingerprints: list[fingerprint_t] = trace_batch(run_dir, byte_differentials)
-    shutil.rmtree(run_dir)
+    if os.path.exists(RUN_DIR):
+        raise ValueError(f"Run directory already exists! Please delete {RUN_DIR.resolve()}")
+    os.mkdir(RUN_DIR)
+    fingerprints: list[fingerprint_t] = trace_batch(RUN_DIR, byte_differentials)
+    shutil.rmtree(RUN_DIR)
 
     # Record
     fingerprints_to_bytes = {}
@@ -253,11 +253,11 @@ def retrieve_queued_runs(queue_file_path: PosixPath) -> list[QueuedRun]:
     # Read queue file and check validity
     with open(queue_file_path, "r", encoding="ascii") as queue_file:
         for split_line in map(lambda line: line.strip().split(","), queue_file.readlines()):
-            assert len(split_line) == 4 or len(split_line) == 3
+            assert len(split_line) in (3, 4)
             name: str = split_line[0]
             commit_hash: str = split_line[1]
             timeout: int = int(split_line[2])
-            config_file: PosixPath = PosixPath(split_line[3]) if len(split_line) == 4 else CONFIG_COPY_PATH
+            config_file: PosixPath = PosixPath(split_line[3]).resolve() if len(split_line) == 4 else CONFIG_COPY_PATH
             assert config_file.is_file()
             queued_runs.append(QueuedRun(name, commit_hash, timeout, config_file))
     return queued_runs
@@ -326,7 +326,7 @@ def main() -> None:
     shutil.copyfile(CONFIG_FILE_PATH, CONFIG_COPY_PATH)
 
     # Check that queue file exists and get queued runs
-    queue_file_path = PosixPath(args.queue_file_path)
+    queue_file_path = PosixPath(args.queue_file_path).resolve()
     assert os.path.isfile(queue_file_path)
     queued_runs: list[QueuedRun] = retrieve_queued_runs(queue_file_path)
 
